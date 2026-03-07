@@ -70,22 +70,23 @@ defmodule AshStorage.MixProject do
       ],
       groups_for_modules: [
         AshStorage: [
-          AshStorage
+          AshStorage,
+          AshStorage.Operations
         ],
-        Resources: [
-          AshStorage.Blob,
-          AshStorage.Attachment,
-          AshStorage.VariantRecord
+        "DSL Extensions": [
+          AshStorage.Resource,
+          AshStorage.BlobResource,
+          AshStorage.AttachmentResource
         ],
         Services: [
           AshStorage.Service,
           AshStorage.Service.Disk,
-          AshStorage.Service.S3
+          AshStorage.Service.S3,
+          AshStorage.Service.Test
         ],
-        Analysis: [
-          AshStorage.Analyzer,
-          AshStorage.Transformer,
-          AshStorage.Previewer
+        Introspection: [
+          AshStorage.Resource.Info,
+          AshStorage.Resource.AttachmentDefinition
         ]
       ]
     ]
