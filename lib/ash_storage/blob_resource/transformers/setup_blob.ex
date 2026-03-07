@@ -21,8 +21,8 @@ defmodule AshStorage.BlobResource.Transformers.SetupBlob do
       {:key, :string, allow_nil?: false, public?: true, writable?: true},
       {:filename, :string, allow_nil?: false, public?: true, writable?: true},
       {:content_type, :string, allow_nil?: true, public?: true, writable?: true},
-      {:byte_size, :integer, allow_nil?: false, public?: true, writable?: true},
-      {:checksum, :string, allow_nil?: false, public?: true, writable?: true},
+      {:byte_size, :integer, allow_nil?: true, public?: true, writable?: true},
+      {:checksum, :string, allow_nil?: true, public?: true, writable?: true},
       {:service_name, :atom, allow_nil?: false, public?: true, writable?: true},
       {:metadata, :map, allow_nil?: true, public?: true, writable?: true, default: %{}}
     ]

@@ -55,6 +55,103 @@ defmodule AshStorage.Operations do
   end
 
   @doc """
+  Prepare a direct upload: create a blob record and return a presigned URL.
+
+  The client can then upload directly to the storage service (e.g. S3) without
+  streaming through the server. After the client finishes uploading, call
+  `confirm_direct_upload/4` to create the attachment record.
+
+  ## Options
+
+  - `:filename` - (required) the original filename
+  - `:content_type` - MIME type (default: `"application/octet-stream"`)
+  - `:byte_size` - file size in bytes (required for some services)
+  - `:checksum` - base64-encoded MD5 checksum (optional, used for integrity verification)
+  - `:metadata` - additional metadata map to store on the blob
+  - `:actor` - the actor performing the operation
+  - `:tenant` - the tenant
+
+  ## Returns
+
+      {:ok, %{
+        blob: blob,
+        upload_url: "https://...",
+        upload_fields: [{"key", "..."}, ...] | nil
+      }}
+
+  For presigned PUT uploads (most services), `upload_fields` will be `nil` and
+  the client should PUT the file body directly to `upload_url`.
+
+  For presigned POST/form uploads (S3), `upload_fields` contains form fields
+  that must be included in the multipart POST along with the file.
+  """
+  def prepare_direct_upload(resource, attachment_name, opts \\ []) do
+    with {:ok, attachment_def} <- Info.attachment(resource, attachment_name),
+         {:ok, {service_mod, service_opts}} <- resolve_service(resource, attachment_def) do
+      ctx = build_context(service_opts, resource, attachment_def, opts)
+
+      filename = Keyword.fetch!(opts, :filename)
+      content_type = Keyword.get(opts, :content_type, "application/octet-stream")
+      byte_size = Keyword.get(opts, :byte_size, 0)
+      checksum = Keyword.get(opts, :checksum, "")
+      metadata = Keyword.get(opts, :metadata, %{})
+
+      key = AshStorage.generate_key()
+      blob_resource = Info.storage_blob_resource!(resource)
+
+      with {:ok, blob} <-
+             Ash.create(
+               blob_resource,
+               %{
+                 key: key,
+                 filename: filename,
+                 content_type: content_type,
+                 byte_size: byte_size,
+                 checksum: checksum,
+                 service_name: service_mod,
+                 metadata: metadata
+               },
+               action: :create
+             ),
+           {:ok, upload_info} <- service_mod.direct_upload(key, ctx) do
+        {:ok,
+         %{
+           blob: blob,
+           upload_url: upload_info[:url],
+           upload_fields: upload_info[:fields]
+         }}
+      end
+    end
+  end
+
+  @doc """
+  Confirm a direct upload and attach the blob to a record.
+
+  Call this after the client has finished uploading directly to the storage
+  service. This creates the attachment record linking the blob to the record.
+
+  For `has_one_attached`, any existing attachment is replaced (old blob and file
+  are purged). For `has_many_attached`, the blob is appended.
+
+  ## Options
+
+  - `:actor` - the actor performing the operation
+  - `:tenant` - the tenant
+  """
+  def confirm_direct_upload(record, attachment_name, blob_id, opts \\ []) do
+    resource = record.__struct__
+
+    with {:ok, attachment_def} <- Info.attachment(resource, attachment_name),
+         {:ok, {service_mod, service_opts}} <- resolve_service(resource, attachment_def),
+         ctx = build_context(service_opts, resource, attachment_def, opts),
+         {:ok, blob} <- fetch_blob(resource, blob_id),
+         {:ok, _} <- maybe_replace_existing(record, attachment_def, service_mod, ctx),
+         {:ok, attachment} <- create_attachment(record, attachment_def, blob) do
+      {:ok, %{blob: blob, attachment: attachment}}
+    end
+  end
+
+  @doc """
   Detach an attachment from a record without deleting the blob or file.
 
   For `has_one_attached`, removes the single attachment.
@@ -203,6 +300,15 @@ defmodule AshStorage.Operations do
       actor: Keyword.get(opts, :actor),
       tenant: Keyword.get(opts, :tenant)
     )
+  end
+
+  defp fetch_blob(resource, blob_id) do
+    blob_resource = Info.storage_blob_resource!(resource)
+
+    case Ash.get(blob_resource, blob_id) do
+      {:ok, blob} -> {:ok, blob}
+      {:error, _} -> {:error, :blob_not_found}
+    end
   end
 
   defp resolve_service(resource, attachment_def) do

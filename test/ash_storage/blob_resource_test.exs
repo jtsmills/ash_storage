@@ -25,13 +25,13 @@ defmodule AshStorage.BlobResourceTest do
     test "has byte_size attribute" do
       attr = Ash.Resource.Info.attribute(Blob, :byte_size)
       assert attr.type == Ash.Type.Integer
-      assert attr.allow_nil? == false
+      assert attr.allow_nil? == true
     end
 
     test "has checksum attribute" do
       attr = Ash.Resource.Info.attribute(Blob, :checksum)
       assert attr.type == Ash.Type.String
-      assert attr.allow_nil? == false
+      assert attr.allow_nil? == true
     end
 
     test "has service_name attribute" do

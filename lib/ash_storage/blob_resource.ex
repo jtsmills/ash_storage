@@ -23,8 +23,8 @@ defmodule AshStorage.BlobResource do
   - `key` (string, required) - unique storage key
   - `filename` (string, required)
   - `content_type` (string)
-  - `byte_size` (integer, required)
-  - `checksum` (string, required) - base64-encoded MD5
+  - `byte_size` (integer) - file size in bytes (nil for pending direct uploads)
+  - `checksum` (string) - base64-encoded MD5 (nil for pending direct uploads)
   - `service_name` (atom, required)
   - `metadata` (map, default `%{}`)
 

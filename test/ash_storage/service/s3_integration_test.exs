@@ -14,7 +14,7 @@ defmodule AshStorage.Service.S3IntegrationTest do
   @moduletag :s3_integration
 
   @bucket "ash-storage-test"
-  @port 19000
+  @port 19_000
   @container_name "ash_storage_minio_test"
 
   @service_opts [
