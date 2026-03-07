@@ -5,6 +5,10 @@ defmodule AshStorage.Service do
   A service provides a uniform interface for storing, retrieving, and managing files
   regardless of the underlying storage technology (local disk, S3, GCS, Azure, etc.).
 
+  All callbacks receive an `%AshStorage.Service.Context{}` struct which contains
+  the service-specific options as well as broader context (resource, attachment,
+  actor, tenant).
+
   ## Implementing a Service
 
   To implement a custom storage service, define a module that adopts this behaviour:
@@ -13,7 +17,8 @@ defmodule AshStorage.Service do
         @behaviour AshStorage.Service
 
         @impl true
-        def upload(key, io, opts) do
+        def upload(key, data, context) do
+          bucket = context.service_opts[:bucket]
           # Upload implementation
         end
 
@@ -21,20 +26,14 @@ defmodule AshStorage.Service do
       end
   """
 
+  alias AshStorage.Service.Context
+
   @type key :: String.t()
-  @type upload_opts :: keyword()
-  @type download_opts :: keyword()
 
   @doc """
   Upload a file to the storage service.
-
-  ## Options
-
-  - `:content_type` - The MIME type of the file
-  - `:checksum` - Base64-encoded MD5 digest for integrity verification
-  - `:metadata` - Additional metadata to store with the file
   """
-  @callback upload(key(), iodata() | File.Stream.t(), upload_opts()) ::
+  @callback upload(key(), iodata() | File.Stream.t(), Context.t()) ::
               :ok | {:error, term()}
 
   @doc """
@@ -42,61 +41,52 @@ defmodule AshStorage.Service do
 
   Returns the file contents as binary data.
   """
-  @callback download(key(), download_opts()) ::
+  @callback download(key(), Context.t()) ::
               {:ok, binary()} | {:error, term()}
 
   @doc """
   Delete a file from the storage service.
   """
-  @callback delete(key()) :: :ok | {:error, term()}
+  @callback delete(key(), Context.t()) :: :ok | {:error, term()}
 
   @doc """
   Check if a file exists in the storage service.
   """
-  @callback exists?(key()) :: boolean()
+  @callback exists?(key(), Context.t()) :: {:ok, boolean()} | {:error, term()}
 
   @doc """
   Generate a URL for accessing a file.
 
-  ## Options
-
-  - `:expires_in` - Number of seconds until the URL expires (for signed URLs)
-  - `:disposition` - Content disposition (`:inline` or `:attachment`)
-  - `:filename` - Filename for content disposition
-  - `:content_type` - Content type for the response
+  Service-specific options like `:expires_in`, `:disposition`, `:filename`,
+  and `:content_type` can be passed via the context's service_opts.
   """
-  @callback url(key(), keyword()) :: String.t()
+  @callback url(key(), Context.t()) :: String.t()
 
   @doc """
   Upload multiple files to the storage service in bulk.
 
-  Receives a list of `{key, iodata, opts}` tuples and returns `:ok` or
-  `{:error, term()}`.
-
-  The default implementation calls `upload/3` for each item sequentially.
-  Services that support bulk/multipart uploads can override this for efficiency.
+  Receives a list of `{key, data}` tuples. Services that support bulk/multipart
+  uploads can override this for efficiency.
   """
-  @callback upload_many([{key(), iodata() | File.Stream.t(), upload_opts()}], upload_opts()) ::
+  @callback upload_many([{key(), iodata() | File.Stream.t()}], Context.t()) ::
               :ok | {:error, term()}
 
   @doc """
   Delete multiple files from the storage service in bulk.
 
-  Receives a list of keys and returns `:ok` or `{:error, term()}`.
-
-  The default implementation calls `delete/1` for each key sequentially.
   Services that support bulk deletes can override this for efficiency.
   """
-  @callback delete_many([key()], keyword()) :: :ok | {:error, term()}
-
-  @optional_callbacks upload_many: 2, delete_many: 2
+  @callback delete_many([key()], Context.t()) :: :ok | {:error, term()}
 
   @doc """
-  Generate headers and URL for a direct upload from the client.
+  Generate a presigned URL or form for direct client-side upload.
 
-  Returns a map with `:url` and `:headers` keys that the client can use
-  to upload directly to the storage service.
+  Returns a map with at minimum a `:url` key. Depending on the service,
+  it may also include `:headers` (for presigned PUT) or `:fields` (for
+  presigned POST/form uploads).
   """
-  @callback direct_upload_url(key(), keyword()) ::
-              {:ok, %{url: String.t(), headers: map()}} | {:error, term()}
+  @callback direct_upload(key(), Context.t()) ::
+              {:ok, map()} | {:error, term()}
+
+  @optional_callbacks upload_many: 2, delete_many: 2, direct_upload: 2
 end

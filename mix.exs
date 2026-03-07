@@ -121,6 +121,8 @@ defmodule AshStorage.MixProject do
       {:spark, "~> 2.2 and >= 2.2.10"},
       {:igniter, "~> 0.5", optional: true},
       {:jason, "~> 1.2"},
+      {:req, "~> 0.5", optional: true},
+      {:req_s3, "~> 0.2", optional: true},
       # dev/test dependencies
       {:ex_doc, "~> 0.37-rc", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},

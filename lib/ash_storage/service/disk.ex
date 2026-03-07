@@ -4,16 +4,22 @@ defmodule AshStorage.Service.Disk do
 
   ## Configuration
 
-      config :ash_storage, :services,
-        local: {AshStorage.Service.Disk, root: "priv/storage"}
+      storage do
+        service {AshStorage.Service.Disk, root: "priv/storage", base_url: "/files"}
+      end
+
+  ## Options
+
+  - `:root` - (required) the root directory for file storage
+  - `:base_url` - (required for `url/2`) the base URL for serving files
   """
 
   @behaviour AshStorage.Service
 
   # sobelow_skip ["Traversal.FileModule"]
   @impl true
-  def upload(key, io, opts) do
-    root = Keyword.fetch!(opts, :root)
+  def upload(key, io, %AshStorage.Service.Context{} = ctx) do
+    root = Keyword.fetch!(ctx.service_opts, :root)
     path = Path.join(root, key)
 
     path |> Path.dirname() |> File.mkdir_p!()
@@ -34,8 +40,8 @@ defmodule AshStorage.Service.Disk do
 
   # sobelow_skip ["Traversal.FileModule"]
   @impl true
-  def download(key, opts) do
-    root = Keyword.fetch!(opts, :root)
+  def download(key, %AshStorage.Service.Context{} = ctx) do
+    root = Keyword.fetch!(ctx.service_opts, :root)
     path = Path.join(root, key)
 
     case File.read(path) do
@@ -45,17 +51,10 @@ defmodule AshStorage.Service.Disk do
     end
   end
 
-  @impl true
-  def delete(key) do
-    raise ArgumentError, "delete/1 requires options, use the service configuration. Key: #{key}"
-  end
-
-  @doc """
-  Delete a file from disk.
-  """
   # sobelow_skip ["Traversal.FileModule"]
-  def delete(key, opts) do
-    root = Keyword.fetch!(opts, :root)
+  @impl true
+  def delete(key, %AshStorage.Service.Context{} = ctx) do
+    root = Keyword.fetch!(ctx.service_opts, :root)
     path = Path.join(root, key)
 
     case File.rm(path) do
@@ -65,36 +64,31 @@ defmodule AshStorage.Service.Disk do
     end
   end
 
-  @impl true
-  def exists?(key) do
-    raise ArgumentError,
-          "exists?/1 requires options, use the service configuration. Key: #{key}"
-  end
-
-  @doc """
-  Check if a file exists on disk.
-  """
   # sobelow_skip ["Traversal.FileModule"]
-  def exists?(key, opts) do
-    root = Keyword.fetch!(opts, :root)
+  @impl true
+  def exists?(key, %AshStorage.Service.Context{} = ctx) do
+    root = Keyword.fetch!(ctx.service_opts, :root)
     path = Path.join(root, key)
-    File.exists?(path)
+    {:ok, File.exists?(path)}
   end
 
   @impl true
-  def url(key, opts) do
-    base_url = Keyword.fetch!(opts, :base_url)
+  def url(key, %AshStorage.Service.Context{} = ctx) do
+    base_url = Keyword.fetch!(ctx.service_opts, :base_url)
     "#{base_url}/#{key}"
   end
 
   @impl true
-  def direct_upload_url(key, opts) do
-    base_url = Keyword.fetch!(opts, :base_url)
+  def direct_upload(key, %AshStorage.Service.Context{} = ctx) do
+    base_url = Keyword.fetch!(ctx.service_opts, :base_url)
 
     {:ok,
      %{
        url: "#{base_url}/disk/#{key}",
-       headers: %{"content-type" => Keyword.get(opts, :content_type, "application/octet-stream")}
+       headers: %{
+         "content-type" =>
+           Keyword.get(ctx.service_opts, :content_type, "application/octet-stream")
+       }
      }}
   end
 end

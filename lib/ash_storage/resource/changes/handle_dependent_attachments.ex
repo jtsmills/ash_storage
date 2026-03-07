@@ -60,8 +60,8 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
   defp delete_files(_changeset, {:ok, record}) do
     keys_to_purge = record.__metadata__[:__ash_storage_keys_to_purge__] || []
 
-    Enum.each(keys_to_purge, fn {service_mod, service_opts, key} ->
-      AshStorage.Operations.delete_from_service(service_mod, service_opts, key)
+    Enum.each(keys_to_purge, fn {service_mod, ctx, key} ->
+      AshStorage.Operations.delete_from_service(service_mod, ctx, key)
     end)
 
     {:ok, record}

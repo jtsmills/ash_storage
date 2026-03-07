@@ -16,7 +16,7 @@ defmodule AshStorage.Resource.Calculations.AttachmentUrl do
   end
 
   @impl true
-  def calculate(records, opts, _context) do
+  def calculate(records, opts, context) do
     attachment_name = opts[:attachment_name]
     resource = opts[:resource]
     {:ok, attachment_def} = AshStorage.Resource.Info.attachment(resource, attachment_name)
@@ -24,11 +24,19 @@ defmodule AshStorage.Resource.Calculations.AttachmentUrl do
     {:ok, {service_mod, service_opts}} =
       AshStorage.Resource.Info.service_for_attachment(resource, attachment_def)
 
+    ctx =
+      AshStorage.Service.Context.new(service_opts,
+        resource: resource,
+        attachment: attachment_def,
+        actor: Map.get(context, :actor),
+        tenant: Map.get(context, :tenant)
+      )
+
     {:ok,
      Enum.map(records, fn record ->
        case Map.get(record, attachment_name) do
          nil -> nil
-         attachment -> service_mod.url(attachment.blob.key, service_opts)
+         attachment -> service_mod.url(attachment.blob.key, ctx)
        end
      end)}
   end

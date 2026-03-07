@@ -69,7 +69,69 @@ defmodule AshStorage.Service.Test do
   end
 
   @impl true
-  def upload(key, io, opts) do
+  def upload(key, io, %AshStorage.Service.Context{} = ctx) do
+    do_upload(key, io, ctx.service_opts)
+  end
+
+  @impl true
+  def download(key, %AshStorage.Service.Context{} = ctx) do
+    do_download(key, ctx.service_opts)
+  end
+
+  @doc """
+  Download a file from the test store. Convenience for tests that takes keyword opts.
+  """
+  def download(key, opts) when is_list(opts) do
+    do_download(key, opts)
+  end
+
+  @impl true
+  def delete(key, %AshStorage.Service.Context{} = ctx) do
+    do_delete(key, ctx.service_opts)
+  end
+
+  @impl true
+  def exists?(key, %AshStorage.Service.Context{} = ctx) do
+    {:ok, do_exists?(key, ctx.service_opts)}
+  end
+
+  @doc """
+  Check if a file exists in the test store. Convenience for tests that takes keyword opts.
+  """
+  def exists?(key, opts) when is_list(opts) do
+    do_exists?(key, opts)
+  end
+
+  @doc """
+  Check if a file exists in the test store using the default table.
+  """
+  def exists?(key) do
+    do_exists?(key, [])
+  end
+
+  @impl true
+  def url(key, %AshStorage.Service.Context{} = ctx) do
+    base_url = Keyword.get(ctx.service_opts, :base_url, "http://test.local/storage")
+    "#{base_url}/#{key}"
+  end
+
+  @impl true
+  def direct_upload(key, %AshStorage.Service.Context{} = ctx) do
+    base_url = Keyword.get(ctx.service_opts, :base_url, "http://test.local/storage")
+
+    {:ok,
+     %{
+       url: "#{base_url}/direct/#{key}",
+       headers: %{
+         "content-type" =>
+           Keyword.get(ctx.service_opts, :content_type, "application/octet-stream")
+       }
+     }}
+  end
+
+  # -- Internal helpers --
+
+  defp do_upload(key, io, opts) do
     table = Keyword.get(opts, :name, @default_table)
     ensure_started!(table)
 
@@ -84,8 +146,7 @@ defmodule AshStorage.Service.Test do
     :ok
   end
 
-  @impl true
-  def download(key, opts) do
+  defp do_download(key, opts) do
     table = Keyword.get(opts, :name, @default_table)
     ensure_started!(table)
 
@@ -95,50 +156,17 @@ defmodule AshStorage.Service.Test do
     end
   end
 
-  @impl true
-  def delete(key) do
-    delete(key, [])
-  end
-
-  @doc """
-  Delete a file from the test store.
-  """
-  def delete(key, opts) do
+  defp do_delete(key, opts) do
     table = Keyword.get(opts, :name, @default_table)
     ensure_started!(table)
     :ets.delete(table, key)
     :ok
   end
 
-  @impl true
-  def exists?(key) do
-    exists?(key, [])
-  end
-
-  @doc """
-  Check if a file exists in the test store.
-  """
-  def exists?(key, opts) do
+  defp do_exists?(key, opts) do
     table = Keyword.get(opts, :name, @default_table)
     ensure_started!(table)
     :ets.member(table, key)
-  end
-
-  @impl true
-  def url(key, opts) do
-    base_url = Keyword.get(opts, :base_url, "http://test.local/storage")
-    "#{base_url}/#{key}"
-  end
-
-  @impl true
-  def direct_upload_url(key, opts) do
-    base_url = Keyword.get(opts, :base_url, "http://test.local/storage")
-
-    {:ok,
-     %{
-       url: "#{base_url}/direct/#{key}",
-       headers: %{"content-type" => Keyword.get(opts, :content_type, "application/octet-stream")}
-     }}
   end
 
   defp ensure_started!(table) do
