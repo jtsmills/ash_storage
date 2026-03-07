@@ -262,6 +262,14 @@ AshStorage ships with:
 
 Implement the `AshStorage.Service` behaviour to add custom backends.
 
+## Roadmap
+
+- **S3 service** — Real implementation of `AshStorage.Service.S3` for S3-compatible storage
+- **Direct upload flow** — Create blob + signed URL for client-side uploads without streaming through the server
+- **File serving / URL generation** — Public vs signed/expiring URLs, configurable URL expiry
+- **Variants** — Image/file transformations (resize, convert), on-demand generation, variant records with content digests
+- **Mirroring** — Mirror service that replicates uploads across multiple backends for redundancy
+
 ## Documentation
 
 - [HexDocs](https://hexdocs.pm/ash_storage)
