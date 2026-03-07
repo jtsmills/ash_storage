@@ -21,11 +21,8 @@ defmodule AshStorage.Resource.Calculations.AttachmentUrl do
     resource = opts[:resource]
     {:ok, attachment_def} = AshStorage.Resource.Info.attachment(resource, attachment_name)
 
-    {service_mod, service_opts} =
-      case AshStorage.Resource.Info.service_for_attachment(resource, attachment_def) do
-        {:ok, service} -> service
-        {mod, opts} when is_atom(mod) -> {mod, opts}
-      end
+    {:ok, {service_mod, service_opts}} =
+      AshStorage.Resource.Info.service_for_attachment(resource, attachment_def)
 
     {:ok,
      Enum.map(records, fn record ->

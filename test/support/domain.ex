@@ -9,5 +9,6 @@ defmodule AshStorage.Test.Domain do
     resource AshStorage.Test.Attachment
     resource AshStorage.Test.PolymorphicAttachment
     resource AshStorage.Test.MultiAttachment
+    resource AshStorage.Test.ConfigurablePost
   end
 end

@@ -49,4 +49,26 @@ defmodule AshStorage.ResourceTest do
       assert att.dependent == :purge
     end
   end
+
+  describe "service_for_attachment/2" do
+    test "returns DSL service by default" do
+      {:ok, att} = Info.attachment(AshStorage.Test.Post, :cover_image)
+
+      assert {:ok, {AshStorage.Service.Test, []}} =
+               Info.service_for_attachment(AshStorage.Test.Post, att)
+    end
+
+    test "app config overrides DSL service" do
+      {:ok, att} = Info.attachment(AshStorage.Test.ConfigurablePost, :avatar)
+
+      Application.put_env(:ash_storage, AshStorage.Test.ConfigurablePost,
+        storage: [service: {AshStorage.Service.Disk, [root: "/tmp/override"]}]
+      )
+
+      assert {:ok, {AshStorage.Service.Disk, [root: "/tmp/override"]}} =
+               Info.service_for_attachment(AshStorage.Test.ConfigurablePost, att)
+    after
+      Application.delete_env(:ash_storage, AshStorage.Test.ConfigurablePost)
+    end
+  end
 end

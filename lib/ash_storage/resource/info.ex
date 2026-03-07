@@ -25,8 +25,19 @@ defmodule AshStorage.Resource.Info do
     end
   end
 
-  @doc "Get the effective service for an attachment (attachment-level overrides resource-level)"
+  @doc """
+  Get the effective service for an attachment.
+
+  Resolution order:
+  1. Per-attachment `service` option in the DSL
+  2. Application config: `config :my_app, MyResource, storage: [service: {Mod, opts}]`
+  3. Resource-level `service` option in the DSL
+  """
   def service_for_attachment(resource, attachment) do
-    attachment.service || storage_service(resource)
+    if attachment.service do
+      {:ok, attachment.service}
+    else
+      Spark.Dsl.Extension.fetch_opt(resource, [:storage], :service, true)
+    end
   end
 end
