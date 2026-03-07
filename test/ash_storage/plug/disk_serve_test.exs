@@ -1,7 +1,6 @@
 defmodule AshStorage.Plug.DiskServeTest do
   use ExUnit.Case, async: true
 
-  import Plug.Conn
   import Plug.Test
 
   alias AshStorage.Plug.DiskServe

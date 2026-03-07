@@ -133,6 +133,17 @@ defmodule AshStorage.Service.S3IntegrationTest do
       # Actually fetch via the presigned URL
       assert {:ok, %{status: 200, body: "presigned content"}} = Req.get(url)
     end
+
+    test "presigned URL respects expires_in" do
+      key = unique_key()
+      S3.upload(key, "expiry test", ctx())
+
+      url = S3.url(key, ctx(presigned: true, expires_in: 60))
+      assert url =~ "X-Amz-Signature"
+      assert url =~ "X-Amz-Expires=60"
+
+      assert {:ok, %{status: 200, body: "expiry test"}} = Req.get(url)
+    end
   end
 
   describe "prefix option" do
@@ -146,6 +157,76 @@ defmodule AshStorage.Service.S3IntegrationTest do
       # The actual S3 key should be prefixed
       assert {:ok, "prefixed data"} =
                S3.download("uploads/#{key}", ctx())
+    end
+  end
+
+  describe "Proxy plug with S3" do
+    test "serves file through proxy" do
+      key = unique_key()
+      S3.upload(key, "proxy s3 content", ctx())
+
+      plug_opts =
+        AshStorage.Plug.Proxy.init(service: {AshStorage.Service.S3, @service_opts})
+
+      conn =
+        Plug.Test.conn(:get, "/#{key}")
+        |> AshStorage.Plug.Proxy.call(plug_opts)
+
+      assert conn.status == 200
+      assert conn.resp_body == "proxy s3 content"
+    end
+
+    test "returns 404 for missing key through proxy" do
+      plug_opts =
+        AshStorage.Plug.Proxy.init(service: {AshStorage.Service.S3, @service_opts})
+
+      conn =
+        Plug.Test.conn(:get, "/#{unique_key()}")
+        |> AshStorage.Plug.Proxy.call(plug_opts)
+
+      assert conn.status == 404
+    end
+
+    test "signed proxy rejects unsigned requests" do
+      key = unique_key()
+      S3.upload(key, "secret data", ctx())
+
+      plug_opts =
+        AshStorage.Plug.Proxy.init(
+          service: {AshStorage.Service.S3, @service_opts},
+          secret: "proxy-test-secret"
+        )
+
+      conn =
+        Plug.Test.conn(:get, "/#{key}")
+        |> AshStorage.Plug.Proxy.call(plug_opts)
+
+      assert conn.status == 403
+    end
+
+    test "signed proxy serves with valid token" do
+      key = unique_key()
+      S3.upload(key, "signed proxy data", ctx())
+      secret = "proxy-test-secret"
+      expires = System.system_time(:second) + 3600
+      token = AshStorage.Token.sign(secret, key, expires)
+
+      plug_opts =
+        AshStorage.Plug.Proxy.init(
+          service: {AshStorage.Service.S3, @service_opts},
+          secret: secret
+        )
+
+      conn =
+        Plug.Test.conn(
+          :get,
+          "/#{key}?token=#{URI.encode_www_form(token)}&expires=#{expires}"
+        )
+        |> Plug.Conn.fetch_query_params()
+        |> AshStorage.Plug.Proxy.call(plug_opts)
+
+      assert conn.status == 200
+      assert conn.resp_body == "signed proxy data"
     end
   end
 
@@ -183,6 +264,27 @@ defmodule AshStorage.Service.S3IntegrationTest do
       # Load the attachment via Ash
       post = Ash.load!(post, avatar: :blob)
       assert post.avatar.blob.key == blob.key
+
+      # URL calculation should return S3 URL
+      post = Ash.load!(post, :avatar_url)
+      assert post.avatar_url == "http://localhost:#{@port}/#{@bucket}/#{blob.key}"
+
+      # Presigned URL calculation via config override
+      Application.put_env(:ash_storage, AshStorage.Test.ConfigurablePost,
+        storage: [
+          service: {AshStorage.Service.S3, Keyword.put(@service_opts, :presigned, true)}
+        ]
+      )
+
+      post = Ash.load!(post, :avatar_url, force?: true)
+      assert post.avatar_url =~ "X-Amz-Signature"
+
+      # Reset to plain URLs for purge
+      Application.put_env(:ash_storage, AshStorage.Test.ConfigurablePost,
+        storage: [
+          service: {AshStorage.Service.S3, @service_opts}
+        ]
+      )
 
       # Purge should remove from S3
       {:ok, _} = AshStorage.Operations.purge(post, :avatar)
