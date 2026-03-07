@@ -68,6 +68,30 @@ defmodule AshStorage.Service do
   @callback url(key(), keyword()) :: String.t()
 
   @doc """
+  Upload multiple files to the storage service in bulk.
+
+  Receives a list of `{key, iodata, opts}` tuples and returns `:ok` or
+  `{:error, term()}`.
+
+  The default implementation calls `upload/3` for each item sequentially.
+  Services that support bulk/multipart uploads can override this for efficiency.
+  """
+  @callback upload_many([{key(), iodata() | File.Stream.t(), upload_opts()}], upload_opts()) ::
+              :ok | {:error, term()}
+
+  @doc """
+  Delete multiple files from the storage service in bulk.
+
+  Receives a list of keys and returns `:ok` or `{:error, term()}`.
+
+  The default implementation calls `delete/1` for each key sequentially.
+  Services that support bulk deletes can override this for efficiency.
+  """
+  @callback delete_many([key()], keyword()) :: :ok | {:error, term()}
+
+  @optional_callbacks upload_many: 2, delete_many: 2
+
+  @doc """
   Generate headers and URL for a direct upload from the client.
 
   Returns a map with `:url` and `:headers` keys that the client can use

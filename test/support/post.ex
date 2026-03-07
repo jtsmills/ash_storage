@@ -35,7 +35,6 @@ defmodule AshStorage.Test.Post do
     end
 
     update :update_cover_image do
-      require_atomic? false
       argument :cover_image, :file, allow_nil?: true
 
       change {AshStorage.Resource.Changes.AttachFile,

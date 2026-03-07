@@ -13,6 +13,11 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
     end
   end
 
+  @impl true
+  def atomic(changeset, opts, context) do
+    {:ok, change(changeset, opts, context)}
+  end
+
   # Inside transaction: destroy attachment/blob records, collect keys to purge
   defp destroy_records(_changeset, record) do
     resource = record.__struct__

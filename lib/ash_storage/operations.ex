@@ -141,6 +141,47 @@ defmodule AshStorage.Operations do
   end
 
   @doc """
+  Attach multiple files to multiple records in bulk.
+
+  Takes a list of `{record, attachment_name, io, opts}` tuples and processes them
+  efficiently, using bulk upload when the service supports it.
+
+  Returns a list of `{:ok, %{blob: blob, attachment: attachment}}` or `{:error, reason}`
+  results in the same order as the input.
+  """
+  def attach_many(items) do
+    # Group by {resource, attachment_name} to resolve service once per group
+    items
+    |> Enum.with_index()
+    |> Enum.group_by(fn {{record, attachment_name, _io, _opts}, _idx} ->
+      {record.__struct__, attachment_name}
+    end)
+    |> Enum.flat_map(fn {{resource, attachment_name}, indexed_items} ->
+      case Info.attachment(resource, attachment_name) do
+        {:ok, attachment_def} ->
+          case resolve_service(resource, attachment_def) do
+            {:ok, {service_mod, service_opts}} ->
+              attach_many_for_group(
+                indexed_items,
+                resource,
+                attachment_def,
+                service_mod,
+                service_opts
+              )
+
+            {:error, reason} ->
+              Enum.map(indexed_items, fn {_item, idx} -> {idx, {:error, reason}} end)
+          end
+
+        :error ->
+          Enum.map(indexed_items, fn {_item, idx} -> {idx, :error} end)
+      end
+    end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.map(&elem(&1, 1))
+  end
+
+  @doc """
   Delete a file from a storage service, handling both arity-1 and arity-2 delete callbacks.
   """
   def delete_from_service(service_mod, service_opts, key) do
@@ -152,6 +193,81 @@ defmodule AshStorage.Operations do
   end
 
   # -- Private helpers --
+
+  defp attach_many_for_group(indexed_items, resource, attachment_def, service_mod, service_opts) do
+    # Prepare all uploads: read data, generate keys, compute checksums
+    prepared =
+      Enum.map(indexed_items, fn {{record, _name, io, opts}, idx} ->
+        filename = Keyword.fetch!(opts, :filename)
+        content_type = Keyword.get(opts, :content_type, "application/octet-stream")
+        metadata = Keyword.get(opts, :metadata, %{})
+        data = read_io(io)
+        key = AshStorage.generate_key()
+        checksum = :crypto.hash(:md5, data) |> Base.encode64()
+        byte_size = byte_size(data)
+
+        {idx, record, key, data,
+         %{
+           filename: filename,
+           content_type: content_type,
+           metadata: metadata,
+           checksum: checksum,
+           byte_size: byte_size
+         }}
+      end)
+
+    # Bulk upload if supported, otherwise individual uploads
+    upload_result =
+      if function_exported?(service_mod, :upload_many, 2) do
+        upload_entries = Enum.map(prepared, fn {_idx, _record, key, data, _meta} ->
+          {key, data, service_opts}
+        end)
+
+        service_mod.upload_many(upload_entries, service_opts)
+      else
+        Enum.reduce_while(prepared, :ok, fn {_idx, _record, key, data, _meta}, :ok ->
+          case service_mod.upload(key, data, service_opts) do
+            :ok -> {:cont, :ok}
+            {:error, _} = err -> {:halt, err}
+          end
+        end)
+      end
+
+    case upload_result do
+      :ok ->
+        # Create blob and attachment records for each item
+        Enum.map(prepared, fn {idx, record, key, _data, meta} ->
+          blob_resource = Info.storage_blob_resource!(resource)
+
+          result =
+            with {:ok, _} <- maybe_replace_existing(record, attachment_def),
+                 {:ok, blob} <-
+                   Ash.create(
+                     blob_resource,
+                     %{
+                       key: key,
+                       filename: meta.filename,
+                       content_type: meta.content_type,
+                       byte_size: meta.byte_size,
+                       checksum: meta.checksum,
+                       service_name: service_mod,
+                       metadata: meta.metadata
+                     },
+                     action: :create
+                   ),
+                 {:ok, attachment} <- create_attachment(record, attachment_def, blob) do
+              {:ok, %{blob: blob, attachment: attachment}}
+            end
+
+          {idx, result}
+        end)
+
+      {:error, reason} ->
+        Enum.map(prepared, fn {idx, _record, _key, _data, _meta} ->
+          {idx, {:error, reason}}
+        end)
+    end
+  end
 
   defp resolve_service(resource, attachment_def) do
     case Info.service_for_attachment(resource, attachment_def) do
