@@ -88,5 +88,25 @@ defmodule AshStorage.Service do
   @callback direct_upload(key(), Context.t()) ::
               {:ok, map()} | {:error, term()}
 
-  @optional_callbacks upload_many: 2, delete_many: 2, direct_upload: 2
+  @doc """
+  Return the fields from the service opts that should be persisted on the blob
+  record for later operations (e.g. async purge).
+
+  Returns a keyword list suitable as the `fields` constraint for `Ash.Type.Keyword`.
+
+  Example:
+
+      def service_opts_fields do
+        [
+          root: [type: :string],
+          bucket: [type: :string],
+          region: [type: :string]
+        ]
+      end
+
+  Services that don't implement this callback cannot be used with async purge.
+  """
+  @callback service_opts_fields() :: keyword()
+
+  @optional_callbacks upload_many: 2, delete_many: 2, direct_upload: 2, service_opts_fields: 0
 end

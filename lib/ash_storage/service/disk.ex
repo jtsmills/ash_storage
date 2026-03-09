@@ -20,6 +20,13 @@ defmodule AshStorage.Service.Disk do
 
   @behaviour AshStorage.Service
 
+  @impl true
+  def service_opts_fields do
+    [
+      root: [type: :string, allow_nil?: false]
+    ]
+  end
+
   # sobelow_skip ["Traversal.FileModule"]
   @impl true
   def upload(key, io, %AshStorage.Service.Context{} = ctx) do

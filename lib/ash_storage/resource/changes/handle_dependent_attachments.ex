@@ -7,9 +7,29 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
     if changeset.action.soft? do
       changeset
     else
-      changeset
-      |> Ash.Changeset.after_action(&destroy_records/2)
-      |> Ash.Changeset.after_transaction(&delete_files/2)
+      resource = changeset.resource
+      async? = async_purge?(resource)
+
+      # Find attachments BEFORE the action runs, because ON DELETE SET NULL
+      # will nilify the FK after the SQL DELETE executes, making them unfindable.
+      changeset =
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          record = changeset.data
+          attachments_by_name = prefetch_attachments(record)
+          Ash.Changeset.put_context(changeset, :__ash_storage_attachments__, attachments_by_name)
+        end)
+
+      changeset =
+        Ash.Changeset.after_action(changeset, fn changeset, record ->
+          attachments_by_name = changeset.context[:__ash_storage_attachments__] || %{}
+          handle_dependent(record, attachments_by_name, async?)
+        end)
+
+      if async? do
+        changeset
+      else
+        Ash.Changeset.after_transaction(changeset, &delete_files/2)
+      end
     end
   end
 
@@ -18,45 +38,157 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
     {:ok, change(changeset, opts, context)}
   end
 
-  # Inside transaction: destroy attachment/blob records, collect keys to purge
-  defp destroy_records(_changeset, record) do
-    resource = record.__struct__
-    attachments = AshStorage.Resource.Info.attachments(resource)
+  defp async_purge?(resource) do
+    blob_resource = AshStorage.Resource.Info.storage_blob_resource!(resource)
 
-    case collect_and_destroy(record, resource, attachments) do
-      {:ok, keys_to_purge} ->
-        {:ok, Ash.Resource.put_metadata(record, :__ash_storage_keys_to_purge__, keys_to_purge)}
+    Code.ensure_loaded?(AshOban) &&
+      Spark.Dsl.Extension.get_persisted(blob_resource, :extensions)
+      |> List.wrap()
+      |> Enum.member?(AshOban)
+  end
+
+  # sobelow_skip ["DOS.BinToAtom"]
+  defp prefetch_attachments(record) do
+    resource = record.__struct__
+    attachment_defs = AshStorage.Resource.Info.attachments(resource)
+
+    Enum.reduce(attachment_defs, %{}, fn attachment_def, acc ->
+      case attachment_def.dependent do
+        dep when dep in [:purge, :detach] ->
+          attachment_resource = AshStorage.Resource.Info.storage_attachment_resource!(resource)
+          record_id = Map.get(record, :id) |> to_string()
+
+          belongs_to_resources =
+            Spark.Dsl.Extension.get_entities(attachment_resource, [:attachment])
+
+          parent_rel =
+            Enum.find(belongs_to_resources, fn bt ->
+              bt.resource == resource
+            end)
+
+          filter =
+            if parent_rel do
+              [{:name, to_string(attachment_def.name)}, {:"#{parent_rel.name}_id", record_id}]
+            else
+              [
+                name: to_string(attachment_def.name),
+                record_type: to_string(resource),
+                record_id: record_id
+              ]
+            end
+
+          case attachment_resource
+               |> Ash.Query.filter(^filter)
+               |> Ash.Query.load(:blob)
+               |> Ash.read() do
+            {:ok, attachments} -> Map.put(acc, attachment_def.name, attachments)
+            _ -> acc
+          end
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  defp handle_dependent(record, attachments_by_name, async?) do
+    resource = record.__struct__
+    attachment_defs = AshStorage.Resource.Info.attachments(resource)
+
+    case process_attachments(attachment_defs, attachments_by_name, async?) do
+      {:ok, result} ->
+        if async? do
+          trigger_purge_jobs(result)
+          {:ok, record}
+        else
+          {:ok, Ash.Resource.put_metadata(record, :__ash_storage_keys_to_purge__, result)}
+        end
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  defp collect_and_destroy(record, _resource, attachments) do
-    Enum.reduce_while(attachments, {:ok, []}, fn attachment_def, {:ok, keys_acc} ->
+  defp process_attachments(attachment_defs, attachments_by_name, async?) do
+    Enum.reduce_while(attachment_defs, {:ok, []}, fn attachment_def, {:ok, acc} ->
+      found_attachments = Map.get(attachments_by_name, attachment_def.name, [])
+
       case attachment_def.dependent do
         :purge ->
-          case AshStorage.Operations.destroy_attachment_and_blob_records(
-                 record,
-                 attachment_def.name
-               ) do
-            {:ok, purge_keys} -> {:cont, {:ok, keys_acc ++ purge_keys}}
-            {:error, error} -> {:halt, {:error, error}}
+          if async? do
+            case mark_for_purge(found_attachments) do
+              {:ok, blobs} -> {:cont, {:ok, acc ++ blobs}}
+              {:error, error} -> {:halt, {:error, error}}
+            end
+          else
+            case destroy_and_collect_keys(found_attachments) do
+              {:ok, purge_keys} -> {:cont, {:ok, acc ++ purge_keys}}
+              {:error, error} -> {:halt, {:error, error}}
+            end
           end
 
         :detach ->
-          case AshStorage.Operations.detach_all(record, attachment_def.name) do
-            {:ok, _} -> {:cont, {:ok, keys_acc}}
+          case destroy_attachment_records(found_attachments) do
+            {:ok, _} -> {:cont, {:ok, acc}}
             {:error, error} -> {:halt, {:error, error}}
           end
 
         false ->
-          {:cont, {:ok, keys_acc}}
+          {:cont, {:ok, acc}}
       end
     end)
   end
 
-  # Outside transaction: delete files from storage (only on success)
+  defp mark_for_purge(attachments) do
+    Enum.reduce_while(attachments, {:ok, []}, fn att, {:ok, acc} ->
+      blob = att.blob
+
+      with {:ok, _} <- Ash.destroy(att, action: :destroy, return_destroyed?: true),
+           {:ok, blob} <-
+             Ash.update(blob, %{pending_purge: true},
+               action: :mark_for_purge,
+               return_record?: true
+             ) do
+        {:cont, {:ok, [blob | acc]}}
+      else
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp destroy_and_collect_keys(attachments) do
+    Enum.reduce_while(attachments, {:ok, []}, fn att, {:ok, keys_acc} ->
+      blob = att.blob
+      # Capture service info before destroying the blob
+      service_mod = blob.service_name
+      loaded_blob = Ash.load!(blob, :parsed_service_opts)
+      ctx = AshStorage.Service.Context.new(loaded_blob.parsed_service_opts || [])
+
+      with {:ok, _} <- Ash.destroy(att, action: :destroy, return_destroyed?: true),
+           {:ok, _} <- Ash.destroy(blob, action: :destroy, return_destroyed?: true) do
+        {:cont, {:ok, [{service_mod, ctx, blob.key} | keys_acc]}}
+      else
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp destroy_attachment_records(attachments) do
+    Enum.reduce_while(attachments, {:ok, []}, fn att, {:ok, acc} ->
+      case Ash.destroy(att, action: :destroy, return_destroyed?: true) do
+        {:ok, destroyed} -> {:cont, {:ok, [destroyed | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp trigger_purge_jobs(blobs) when is_list(blobs) and blobs != [] do
+    AshOban.run_triggers(blobs, :purge_blob)
+  end
+
+  defp trigger_purge_jobs(_), do: :ok
+
+  # Outside transaction: delete files from storage (only on success, sync mode only)
   defp delete_files(_changeset, {:ok, record}) do
     keys_to_purge = record.__metadata__[:__ash_storage_keys_to_purge__] || []
 

@@ -26,13 +26,43 @@ defmodule AshStorage.BlobResource do
   - `byte_size` (integer) - file size in bytes (nil for pending direct uploads)
   - `checksum` (string) - base64-encoded MD5 (nil for pending direct uploads)
   - `service_name` (atom, required)
+  - `service_opts` (keyword, default `[]`) - persisted service options for async operations
   - `metadata` (map, default `%{}`)
+  - `pending_purge` (boolean, default `false`) - whether this blob is awaiting async deletion
 
   The following actions are added:
   - `:create` (create) - accepts all blob attributes
   - `:read` (read)
   - `:destroy` (destroy)
   - `:update_metadata` (update) - accepts only `:metadata`
+  - `:mark_for_purge` (update) - sets `pending_purge` to `true`
+  - `:purge_blob` (destroy) - deletes the file from storage and destroys the record
+
+  ## AshOban integration
+
+  To enable async file purging, add `AshOban` to your blob resource's extensions
+  and define a trigger that targets the `:purge_blob` action:
+
+      defmodule MyApp.Storage.Blob do
+        use Ash.Resource,
+          extensions: [AshStorage.BlobResource, AshOban]
+
+        oban do
+          triggers do
+            trigger :purge_blob do
+              action :purge_blob
+              where expr(pending_purge == true)
+              scheduler_cron "* * * * *"
+              max_attempts 3
+            end
+          end
+        end
+      end
+
+  When AshOban is detected on the blob resource, dependent attachment purging
+  on record destroy will mark blobs as `pending_purge: true` instead of
+  deleting files synchronously. The AshOban trigger then picks them up and
+  runs the `:purge_blob` action which deletes the file and destroys the record.
   """
 
   @blob %Spark.Dsl.Section{

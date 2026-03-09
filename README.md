@@ -268,17 +268,66 @@ AshStorage ships with:
 
 - `AshStorage.Service.Disk` — Local filesystem storage
 - `AshStorage.Service.Test` — In-memory storage for tests
-- `AshStorage.Service.S3` — S3-compatible storage (coming soon)
+- `AshStorage.Service.S3` — S3-compatible storage (requires [`req_s3`](https://hex.pm/packages/req_s3))
 
 Implement the `AshStorage.Service` behaviour to add custom backends.
 
 ## Roadmap
 
-- **S3 service** — Real implementation of `AshStorage.Service.S3` for S3-compatible storage
-- **Direct upload flow** — Create blob + signed URL for client-side uploads without streaming through the server
-- **File serving / URL generation** — Public vs signed/expiring URLs, configurable URL expiry
-- **Variants** — Image/file transformations (resize, convert), on-demand generation, variant records with content digests
+- **Analyzers** — Pluggable metadata extraction (image dimensions, video duration, audio bitrate) stored in blob `metadata` map. Default behavior: run synchronously during `attach/4` from the local IO (avoids a download round-trip). With AshOban: optionally enqueue an analyze job instead for heavy analysis (video/audio). Per-attachment config: `analyze: :eager | :lazy | false`. Custom analyzers implement an `Analyzer` behaviour.
+- **Previewers** — Generate preview images for non-image files (PDFs, videos). On-demand by default: generated on first request via the serving plug, then cached. With AshOban: optionally pre-generate eagerly via a background job on upload. Custom previewers implement a `Previewer` behaviour.
+- **Variants** — Image/file transformations (resize, convert). On-demand by default (generated when URL is first requested), with optional eager pre-processing via AshOban. Variant records track the transformation digest and link to a variant blob. Named variants can be declared in the DSL.
+- **Checksum verification** — Integrity checking via checksums on upload
+- **Redirect handler** — A plug that redirects to the storage service URL instead of proxying
 - **Mirroring** — Mirror service that replicates uploads across multiple backends for redundancy
+- **Orphan cleanup** — Periodic cleanup of blobs without files or files without blobs. With AshOban: scheduled job. Without: manual invocation via `AshStorage.Operations.cleanup_orphans/1`.
+
+### Future services
+
+- **GCS** — Google Cloud Storage backend
+- **Azure** — Azure Blob Storage backend
+
+### Library options under consideration
+
+These are the Elixir libraries we're evaluating for each roadmap feature. All would be optional dependencies.
+
+#### Image processing (for variants)
+
+| Library | Approach | Notes |
+|---|---|---|
+| [`image`](https://hex.pm/packages/image) + [`vix`](https://hex.pm/packages/vix) | libvips NIFs | **Recommended.** 2-3x faster than ImageMagick, ~5x less memory. Ships pre-built binaries for macOS/Linux. Supports JPEG, PNG, WebP, TIFF, SVG, HEIF, GIF, AVIF. |
+| [`mogrify`](https://hex.pm/packages/mogrify) | ImageMagick shell-out | Legacy option. Well-known but ImageMagick has a much larger CVE surface than libvips. |
+
+#### Image metadata extraction (for analyzers)
+
+| Library | Approach | Notes |
+|---|---|---|
+| [`ex_image_info`](https://hex.pm/packages/ex_image_info) | Pure Elixir | **Recommended for lightweight use.** Zero deps. Gets dimensions + detected MIME from binary data. Supports JPEG, PNG, GIF, BMP, TIFF, WebP, PSD, SVG, ICO. |
+| [`exexif`](https://hex.pm/packages/exexif) | Pure Elixir | EXIF/TIFF metadata from JPEGs (camera info, GPS, exposure). |
+| [`image`](https://hex.pm/packages/image) | libvips | Also extracts dimensions and metadata. Good if already using it for variants. |
+
+#### Video/audio metadata and thumbnails (for analyzers + previewers)
+
+| Library | Approach | Notes |
+|---|---|---|
+| [`ffmpex`](https://hex.pm/packages/ffmpex) | FFmpeg shell-out | **Recommended.** Wraps ffprobe for metadata (duration, bitrate, codecs, dimensions) and ffmpeg for thumbnail extraction. Stable, well-understood. |
+| [`xav`](https://hex.pm/packages/xav) | FFmpeg NIFs | NIF-based, no shell-out. Part of elixir-webrtc org, actively maintained. Tighter integration but heavier dependency. |
+| [`thumbnex`](https://hex.pm/packages/thumbnex) | ImageMagick + FFmpeg | Simple API for thumbnails from images, videos, and PDFs. Uses `convert` for PDFs, `ffmpeg` for videos. |
+
+#### PDF preview generation (for previewers)
+
+| Library | Approach | Notes |
+|---|---|---|
+| [`image`](https://hex.pm/packages/image) / [`vix`](https://hex.pm/packages/vix) | libvips + poppler | Can render PDF pages to images if libvips is compiled with poppler/PDFium support. Pre-built binaries may or may not include poppler. |
+| [`thumbnex`](https://hex.pm/packages/thumbnex) | ImageMagick shell-out | Uses `convert` to render first page. Requires ImageMagick with Ghostscript. |
+
+#### File type detection / content sniffing (for analyzers)
+
+| Library | Approach | Notes |
+|---|---|---|
+| [`gen_magic`](https://hex.pm/packages/gen_magic) | libmagic NIF | Most accurate — uses the same library behind the Unix `file` command. Supervised process with pooling. Requires `libmagic` system dep. |
+| [`ex_marcel`](https://hex.pm/packages/ex_marcel) | Pure Elixir | Port of Rails' Marcel gem (used by ActiveStorage). Uses Apache Tika signature data. No system deps. |
+| [`magic_number`](https://hex.pm/packages/magic_number) | Pure Elixir | Lightweight magic number matching. Older, less actively maintained. |
 
 ## Documentation
 

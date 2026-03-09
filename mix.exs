@@ -31,6 +31,10 @@ defmodule AshStorage.MixProject do
     elixirc_paths(:dev) ++ ["test/support"]
   end
 
+  defp elixirc_paths(:dev) do
+    ["lib", "dev"]
+  end
+
   defp elixirc_paths(_) do
     ["lib"]
   end
@@ -133,7 +137,13 @@ defmodule AshStorage.MixProject do
       {:mime, "~> 2.0", optional: true},
       {:req, "~> 0.5", optional: true},
       {:req_s3, "~> 0.2", optional: true},
+      {:ash_oban, "~> 0.7", optional: true},
+      {:ash_postgres, "~> 2.0", only: [:dev, :test]},
       # dev/test dependencies
+      {:phoenix, "~> 1.7", only: :dev},
+      {:phoenix_live_view, "~> 1.0", only: :dev},
+      {:ash_phoenix, "~> 2.0", only: :dev},
+      {:bandit, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.37-rc", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
@@ -159,6 +169,7 @@ defmodule AshStorage.MixProject do
     [
       sobelow: "sobelow --skip",
       credo: "credo --strict",
+      dev: "run --no-halt dev.exs",
       docs: [
         "docs",
         "spark.replace_doc_links"

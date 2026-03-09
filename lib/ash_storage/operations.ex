@@ -103,6 +103,7 @@ defmodule AshStorage.Operations do
                  byte_size: byte_size,
                  checksum: checksum,
                  service_name: service_mod,
+                 service_opts: persistable_service_opts(service_mod, service_opts),
                  metadata: metadata
                },
                action: :create
@@ -230,6 +231,37 @@ defmodule AshStorage.Operations do
   end
 
   @doc """
+  Destroy attachment records and mark blobs for async purge.
+
+  Like `destroy_attachment_and_blob_records/3`, but instead of destroying blobs,
+  marks them with `pending_purge: true` so an AshOban trigger can pick them up
+  and run the `:purge_blob` action asynchronously.
+  """
+  def mark_attachments_for_purge(record, attachment_name, _opts \\ []) do
+    resource = record.__struct__
+
+    with {:ok, attachment_def} <- Info.attachment(resource, attachment_name),
+         {:ok, attachments} <- find_attachments(record, attachment_def) do
+      Enum.reduce_while(attachments, {:ok, []}, fn att, {:ok, acc} ->
+        blob = att.blob
+
+        with {:ok, _} <- Ash.destroy(att, action: :destroy, return_destroyed?: true),
+             {:ok, blob} <-
+               Ash.update(
+                 blob,
+                 %{pending_purge: true},
+                 action: :mark_for_purge,
+                 return_record?: true
+               ) do
+          {:cont, {:ok, [blob | acc]}}
+        else
+          {:error, error} -> {:halt, {:error, error}}
+        end
+      end)
+    end
+  end
+
+  @doc """
   Attach multiple files to multiple records in bulk.
 
   Takes a list of `{record, attachment_name, io, opts}` tuples and processes them
@@ -282,6 +314,19 @@ defmodule AshStorage.Operations do
 
   # -- Private helpers --
 
+  defp persistable_service_opts(service_mod, service_opts) do
+    if function_exported?(service_mod, :service_opts_fields, 0) do
+      fields = service_mod.service_opts_fields()
+      field_names = Keyword.keys(fields)
+
+      service_opts
+      |> Keyword.take(field_names)
+      |> Map.new()
+    else
+      %{}
+    end
+  end
+
   defp build_context(service_opts, resource, attachment_def, opts) do
     Context.new(service_opts,
       resource: resource,
@@ -329,6 +374,7 @@ defmodule AshStorage.Operations do
           byte_size: byte_size,
           checksum: checksum,
           service_name: service_mod,
+          service_opts: persistable_service_opts(service_mod, ctx.service_opts),
           metadata: metadata
         },
         action: :create
