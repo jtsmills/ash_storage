@@ -1,4 +1,4 @@
-defmodule AshStorage.Resource.Calculations.AttachmentUrl do
+defmodule AshStorage.Calculations.AttachmentUrls do
   @moduledoc false
   use Ash.Resource.Calculation
 
@@ -19,10 +19,10 @@ defmodule AshStorage.Resource.Calculations.AttachmentUrl do
   def calculate(records, opts, context) do
     attachment_name = opts[:attachment_name]
     resource = opts[:resource]
-    {:ok, attachment_def} = AshStorage.Resource.Info.attachment(resource, attachment_name)
+    {:ok, attachment_def} = AshStorage.Info.attachment(resource, attachment_name)
 
     {:ok, {service_mod, service_opts}} =
-      AshStorage.Resource.Info.service_for_attachment(resource, attachment_def)
+      AshStorage.Info.service_for_attachment(resource, attachment_def)
 
     ctx =
       AshStorage.Service.Context.new(service_opts,
@@ -35,8 +35,14 @@ defmodule AshStorage.Resource.Calculations.AttachmentUrl do
     {:ok,
      Enum.map(records, fn record ->
        case Map.get(record, attachment_name) do
-         nil -> nil
-         attachment -> service_mod.url(attachment.blob.key, ctx)
+         nil ->
+           []
+
+         attachments when is_list(attachments) ->
+           Enum.map(attachments, fn att -> service_mod.url(att.blob.key, ctx) end)
+
+         _other ->
+           []
        end
      end)}
   end

@@ -1,4 +1,4 @@
-defmodule AshStorage.Resource.Transformers.SetupStorage do
+defmodule AshStorage.Transformers.SetupStorage do
   @moduledoc false
   use Spark.Dsl.Transformer
 
@@ -23,7 +23,7 @@ defmodule AshStorage.Resource.Transformers.SetupStorage do
     if has_dependent? do
       Ash.Resource.Builder.add_change(
         dsl_state,
-        AshStorage.Resource.Changes.HandleDependentAttachments,
+        AshStorage.Changes.HandleDependentAttachments,
         on: :destroy
       )
     else
@@ -88,7 +88,7 @@ defmodule AshStorage.Resource.Transformers.SetupStorage do
             dsl_state,
             :"#{attachment_def.name}_url",
             :string,
-            {AshStorage.Resource.Calculations.AttachmentUrl,
+            {AshStorage.Calculations.AttachmentUrl,
              attachment_name: attachment_def.name, resource: resource},
             public?: true,
             filterable?: false,
@@ -100,7 +100,7 @@ defmodule AshStorage.Resource.Transformers.SetupStorage do
             dsl_state,
             calc_name,
             {:array, :string},
-            {AshStorage.Resource.Calculations.AttachmentUrls,
+            {AshStorage.Calculations.AttachmentUrls,
              attachment_name: attachment_def.name, resource: resource},
             public?: true,
             filterable?: false,

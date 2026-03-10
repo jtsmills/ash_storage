@@ -8,7 +8,7 @@ defmodule AshStorage.Operations do
 
   require Ash.Query
 
-  alias AshStorage.Resource.Info
+  alias AshStorage.Info
   alias AshStorage.Service.Context
 
   @doc """

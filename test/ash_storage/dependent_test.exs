@@ -68,7 +68,7 @@ defmodule AshStorage.DependentTest do
 
       storage_change =
         Enum.find(changes, fn change ->
-          change.change == {AshStorage.Resource.Changes.HandleDependentAttachments, []}
+          change.change == {AshStorage.Changes.HandleDependentAttachments, []}
         end)
 
       assert storage_change

@@ -96,7 +96,7 @@ defmodule MyApp.Post do
   use Ash.Resource,
     domain: MyApp.Domain,
     data_layer: AshPostgres.DataLayer,
-    extensions: [AshStorage.Resource],
+    extensions: [AshStorage],
     otp_app: :my_app
 
   storage do
@@ -206,7 +206,7 @@ Override the service at runtime using application config. This requires `otp_app
 # The resource
 defmodule MyApp.Post do
   use Ash.Resource,
-    extensions: [AshStorage.Resource],
+    extensions: [AshStorage],
     otp_app: :my_app
   # ...
 end

@@ -1,4 +1,4 @@
-defmodule AshStorage.Resource.AttachmentDefinition do
+defmodule AshStorage.AttachmentDefinition do
   @moduledoc "Represents a configured attachment on a resource"
   defstruct [
     :name,

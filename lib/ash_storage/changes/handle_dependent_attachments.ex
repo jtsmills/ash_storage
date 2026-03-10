@@ -1,4 +1,4 @@
-defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
+defmodule AshStorage.Changes.HandleDependentAttachments do
   @moduledoc false
   use Ash.Resource.Change
 
@@ -39,7 +39,7 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
   end
 
   defp async_purge?(resource) do
-    blob_resource = AshStorage.Resource.Info.storage_blob_resource!(resource)
+    blob_resource = AshStorage.Info.storage_blob_resource!(resource)
 
     Code.ensure_loaded?(AshOban) &&
       Spark.Dsl.Extension.get_persisted(blob_resource, :extensions)
@@ -50,12 +50,12 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
   # sobelow_skip ["DOS.BinToAtom"]
   defp prefetch_attachments(record) do
     resource = record.__struct__
-    attachment_defs = AshStorage.Resource.Info.attachments(resource)
+    attachment_defs = AshStorage.Info.attachments(resource)
 
     Enum.reduce(attachment_defs, %{}, fn attachment_def, acc ->
       case attachment_def.dependent do
         dep when dep in [:purge, :detach] ->
-          attachment_resource = AshStorage.Resource.Info.storage_attachment_resource!(resource)
+          attachment_resource = AshStorage.Info.storage_attachment_resource!(resource)
           record_id = Map.get(record, :id) |> to_string()
 
           belongs_to_resources =
@@ -93,7 +93,7 @@ defmodule AshStorage.Resource.Changes.HandleDependentAttachments do
 
   defp handle_dependent(record, attachments_by_name, async?) do
     resource = record.__struct__
-    attachment_defs = AshStorage.Resource.Info.attachments(resource)
+    attachment_defs = AshStorage.Info.attachments(resource)
 
     case process_attachments(attachment_defs, attachments_by_name, async?) do
       {:ok, result} ->

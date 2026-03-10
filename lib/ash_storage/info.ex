@@ -1,6 +1,6 @@
-defmodule AshStorage.Resource.Info do
-  @moduledoc "Introspection helpers for `AshStorage.Resource`"
-  use Spark.InfoGenerator, extension: AshStorage.Resource, sections: [:storage]
+defmodule AshStorage.Info do
+  @moduledoc "Introspection helpers for `AshStorage`"
+  use Spark.InfoGenerator, extension: AshStorage, sections: [:storage]
 
   @doc "All attachment definitions on the resource"
   def attachments(resource) do

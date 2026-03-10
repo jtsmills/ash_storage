@@ -1,4 +1,4 @@
-defmodule AshStorage.Resource.Changes.AttachFile do
+defmodule AshStorage.Changes.AttachFile do
   @moduledoc """
   An action change that attaches a file from an argument to the record.
 
@@ -8,7 +8,7 @@ defmodule AshStorage.Resource.Changes.AttachFile do
       create :create do
         argument :cover_image, :file, allow_nil?: true
 
-        change {AshStorage.Resource.Changes.AttachFile,
+        change {AshStorage.Changes.AttachFile,
                 argument: :cover_image, attachment: :cover_image}
       end
 

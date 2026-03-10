@@ -1,7 +1,7 @@
 defmodule AshStorage.ResourceTest do
   use ExUnit.Case, async: true
 
-  alias AshStorage.Resource.Info
+  alias AshStorage.Info
 
   describe "DSL introspection" do
     test "reads has_one attachments" do

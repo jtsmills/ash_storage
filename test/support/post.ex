@@ -3,7 +3,7 @@ defmodule AshStorage.Test.Post do
   use Ash.Resource,
     domain: AshStorage.Test.Domain,
     data_layer: Ash.DataLayer.Ets,
-    extensions: [AshStorage.Resource]
+    extensions: [AshStorage]
 
   ets do
     private? true
@@ -30,14 +30,14 @@ defmodule AshStorage.Test.Post do
       accept [:title]
       argument :cover_image, :file, allow_nil?: true
 
-      change {AshStorage.Resource.Changes.AttachFile,
+      change {AshStorage.Changes.AttachFile,
               argument: :cover_image, attachment: :cover_image}
     end
 
     update :update_cover_image do
       argument :cover_image, :file, allow_nil?: true
 
-      change {AshStorage.Resource.Changes.AttachFile,
+      change {AshStorage.Changes.AttachFile,
               argument: :cover_image, attachment: :cover_image}
     end
   end

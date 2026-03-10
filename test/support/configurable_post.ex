@@ -3,7 +3,7 @@ defmodule AshStorage.Test.ConfigurablePost do
   use Ash.Resource,
     domain: AshStorage.Test.Domain,
     data_layer: Ash.DataLayer.Ets,
-    extensions: [AshStorage.Resource],
+    extensions: [AshStorage],
     otp_app: :ash_storage
 
   ets do

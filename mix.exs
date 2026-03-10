@@ -78,7 +78,7 @@ defmodule AshStorage.MixProject do
           AshStorage.Operations
         ],
         "DSL Extensions": [
-          AshStorage.Resource,
+          AshStorage,
           AshStorage.BlobResource,
           AshStorage.AttachmentResource
         ],
@@ -96,8 +96,8 @@ defmodule AshStorage.MixProject do
           AshStorage.Token
         ],
         Introspection: [
-          AshStorage.Resource.Info,
-          AshStorage.Resource.AttachmentDefinition
+          AshStorage.Info,
+          AshStorage.AttachmentDefinition
         ]
       ]
     ]

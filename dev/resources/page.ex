@@ -3,7 +3,7 @@ defmodule Demo.Page do
   use Ash.Resource,
     domain: Demo.Domain,
     data_layer: Ash.DataLayer.Ets,
-    extensions: [AshStorage.Resource]
+    extensions: [AshStorage]
 
   ets do
     private? false

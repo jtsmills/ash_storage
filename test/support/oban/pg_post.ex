@@ -3,7 +3,7 @@ defmodule AshStorage.Test.PgPost do
   use Ash.Resource,
     domain: AshStorage.Test.PgDomain,
     data_layer: AshPostgres.DataLayer,
-    extensions: [AshStorage.Resource]
+    extensions: [AshStorage]
 
   postgres do
     table "posts"
