@@ -19,7 +19,10 @@ defmodule AshStorage do
           extensions: [AshStorage]
 
         storage do
-          has_one_attached :cover_image
+          has_one_attached :cover_image do
+            analyzer {MyApp.ImageDimensions, format: :png}, analyze: :oban
+          end
+
           has_many_attached :documents
         end
       end
@@ -41,6 +44,20 @@ defmodule AshStorage do
   """
 
   alias AshStorage.AttachmentDefinition
+  alias AshStorage.AnalyzerDefinition
+
+  @analyzer %Spark.Dsl.Entity{
+    name: :analyzer,
+    args: [:module],
+    describe: "Declares an analyzer to run on uploaded files for this attachment.",
+    examples: [
+      "analyzer MyApp.FileInfo",
+      "analyzer {MyApp.ImageDimensions, format: :png}, analyze: :oban",
+      "analyzer MyApp.Thumbnailer, write_attributes: [thumbnail_url: :thumbnail_url]"
+    ],
+    schema: AnalyzerDefinition.schema(),
+    target: AnalyzerDefinition
+  }
 
   @has_one_attached %Spark.Dsl.Entity{
     name: :has_one_attached,
@@ -48,11 +65,14 @@ defmodule AshStorage do
     describe: "Declares a single file attachment on this resource.",
     examples: [
       "has_one_attached :avatar",
-      "has_one_attached :cover_image, service: {AshStorage.Service.Disk, root: \"priv/storage\"}"
+      ~s(has_one_attached :cover_image, service: {AshStorage.Service.Disk, root: "priv/storage"})
     ],
     schema: AttachmentDefinition.has_one_schema(),
     target: AttachmentDefinition,
-    auto_set_fields: [type: :one]
+    auto_set_fields: [type: :one],
+    entities: [
+      analyzers: [@analyzer]
+    ]
   }
 
   @has_many_attached %Spark.Dsl.Entity{
@@ -65,7 +85,10 @@ defmodule AshStorage do
     ],
     schema: AttachmentDefinition.has_many_schema(),
     target: AttachmentDefinition,
-    auto_set_fields: [type: :many]
+    auto_set_fields: [type: :many],
+    entities: [
+      analyzers: [@analyzer]
+    ]
   }
 
   @storage %Spark.Dsl.Section{

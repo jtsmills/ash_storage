@@ -135,4 +135,31 @@ defmodule AshStorage.AnalyzerTest do
       assert analyzer_entry["opts"] == %{"include_word_count" => true}
     end
   end
+
+  describe "write_attributes" do
+    test "writes analyzer results to parent record attributes" do
+      post = create_post!()
+
+      {:ok, %{record: updated_post}} =
+        Operations.attach(post, :analyzed_doc, "hello\nworld\n",
+          filename: "hello.txt",
+          content_type: "text/plain"
+        )
+
+      assert updated_post.cached_line_count == 3
+    end
+
+    test "does not write when analyzer fails" do
+      post = create_post!()
+
+      # Use a content type that TestAnalyzer doesn't accept to trigger "pending" status
+      {:ok, %{record: updated_post}} =
+        Operations.attach(post, :analyzed_doc, "binary data",
+          filename: "photo.png",
+          content_type: "image/png"
+        )
+
+      assert updated_post.cached_line_count == nil
+    end
+  end
 end

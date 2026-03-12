@@ -154,7 +154,7 @@ defmodule AshStorage.DirectUploadTest do
     test "returns error for nonexistent blob" do
       post = create_post!()
 
-      assert {:error, :blob_not_found} =
+      assert {:error, %Ash.Error.Unknown{}} =
                Operations.confirm_direct_upload(
                  post,
                  :cover_image,

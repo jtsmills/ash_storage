@@ -7,9 +7,9 @@ defmodule AshStorage.Verifiers.ValidateObanAnalyzers do
       (AshStorage.Info.has_one_attachments(dsl_state) ++
          AshStorage.Info.has_many_attachments(dsl_state))
       |> Enum.any?(fn attachment_def ->
-        attachment_def.analyzers
-        |> AshStorage.AttachmentDefinition.normalize_analyzers()
-        |> Enum.any?(fn {_module, analyze, _opts} -> analyze == :oban end)
+        Enum.any?(attachment_def.analyzers, fn analyzer_def ->
+          analyzer_def.analyze == :oban
+        end)
       end)
 
     if has_oban_analyzers? do

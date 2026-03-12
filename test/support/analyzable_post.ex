@@ -65,26 +65,32 @@ defmodule AshStorage.Test.AnalyzablePost do
     blob_resource(AshStorage.Test.Blob)
     attachment_resource(AshStorage.Test.Attachment)
 
-    has_one_attached(:document, analyzers: [AshStorage.Test.TestAnalyzer])
+    has_one_attached :document do
+      analyzer AshStorage.Test.TestAnalyzer
+    end
 
-    has_one_attached(:photo,
-      analyzers: [
-        {AshStorage.Test.TestAnalyzer, include_word_count: true},
-        AshStorage.Test.ImageAnalyzer
-      ]
-    )
+    has_one_attached :photo do
+      analyzer {AshStorage.Test.TestAnalyzer, include_word_count: true}
+      analyzer AshStorage.Test.ImageAnalyzer
+    end
 
-    has_one_attached(:risky_file,
-      analyzers: [AshStorage.Test.FailingAnalyzer, AshStorage.Test.TestAnalyzer]
-    )
+    has_one_attached :risky_file do
+      analyzer AshStorage.Test.FailingAnalyzer
+      analyzer AshStorage.Test.TestAnalyzer
+    end
+
+    has_one_attached :analyzed_doc do
+      analyzer AshStorage.Test.TestAnalyzer, write_attributes: [line_count: :cached_line_count]
+    end
   end
 
   attributes do
     uuid_primary_key :id
     attribute :title, :string, allow_nil?: false
+    attribute :cached_line_count, :integer, public?: true
   end
 
   actions do
-    defaults [:read, :destroy, create: [:title]]
+    defaults [:read, :destroy, create: [:title], update: []]
   end
 end

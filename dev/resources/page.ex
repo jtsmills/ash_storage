@@ -21,19 +21,24 @@ defmodule Demo.Page do
     blob_resource(Demo.Blob)
     attachment_resource(Demo.Attachment)
 
-    has_one_attached :cover_image,
-      analyzers: [
-        Demo.Analyzers.FileInfo,
-        {Demo.Analyzers.ImageDimensions, analyze: :oban}
-      ]
+    has_one_attached :cover_image do
+      analyzer Demo.Analyzers.FileInfo
 
-    has_many_attached :documents,
-      analyzers: [Demo.Analyzers.FileInfo]
+      analyzer Demo.Analyzers.ImageDimensions,
+        analyze: :oban,
+        write_attributes: [width: :image_width, height: :image_height]
+    end
+
+    has_many_attached :documents do
+      analyzer Demo.Analyzers.FileInfo
+    end
   end
 
   attributes do
     uuid_primary_key :id
     attribute :title, :string, allow_nil?: false, public?: true
+    attribute :image_width, :integer, public?: true
+    attribute :image_height, :integer, public?: true
   end
 
   actions do

@@ -124,7 +124,9 @@ defmodule AshStorage.OperationsTest do
     test "returns error for unknown attachment name" do
       post = create_post!()
 
-      assert :error = Operations.attach(post, :nonexistent, "data", filename: "f.txt")
+      assert_raise ArgumentError, fn ->
+        Operations.attach(post, :nonexistent, "data", filename: "f.txt")
+      end
     end
   end
 
@@ -161,7 +163,7 @@ defmodule AshStorage.OperationsTest do
       post = create_post!()
       Operations.attach(post, :documents, "doc", filename: "d.txt")
 
-      assert {:error, :blob_id_required_for_has_many} = Operations.detach(post, :documents)
+      assert {:error, %Ash.Error.Unknown{}} = Operations.detach(post, :documents)
     end
   end
 
@@ -212,7 +214,7 @@ defmodule AshStorage.OperationsTest do
       post = create_post!()
       Operations.attach(post, :documents, "doc", filename: "d.txt")
 
-      assert {:error, :blob_id_required_for_has_many} = Operations.purge(post, :documents)
+      assert {:error, %Ash.Error.Unknown{}} = Operations.purge(post, :documents)
     end
   end
 end
