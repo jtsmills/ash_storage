@@ -31,6 +31,10 @@ defmodule Demo.Page do
 
     has_many_attached :documents do
       analyzer Demo.Analyzers.FileInfo
+
+      variant :uppercase, Demo.Variants.Uppercase, generate: :eager
+      variant :reversed, Demo.Variants.Reversed, generate: :oban
+      variant :excerpt, {Demo.Variants.Excerpt, max_chars: 50}
     end
   end
 

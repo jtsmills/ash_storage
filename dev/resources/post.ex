@@ -31,6 +31,9 @@ defmodule Demo.Post do
 
     has_many_attached :documents do
       analyzer Demo.Analyzers.FileInfo
+
+      variant :uppercase, Demo.Variants.Uppercase, generate: :eager
+      variant :excerpt, {Demo.Variants.Excerpt, max_chars: 50}
     end
   end
 

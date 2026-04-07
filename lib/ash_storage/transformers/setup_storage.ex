@@ -93,16 +93,59 @@ defmodule AshStorage.Transformers.SetupStorage do
     resource = Spark.Dsl.Extension.get_persisted(dsl_state, :module)
 
     Enum.reduce(attachments, {:ok, dsl_state}, fn attachment_def, {:ok, dsl_state} ->
-      calc_name = :"#{attachment_def.name}_urls"
+      with {:ok, dsl_state} <- add_base_url_calculation(dsl_state, attachment_def, resource),
+           {:ok, dsl_state} <- add_variant_url_calculations(dsl_state, attachment_def, resource) do
+        {:ok, dsl_state}
+      end
+    end)
+  end
 
+  defp add_url_calculations({:error, error}, _), do: {:error, error}
+
+  # sobelow_skip ["DOS.BinToAtom"]
+  defp add_base_url_calculation(dsl_state, attachment_def, resource) do
+    case attachment_def.type do
+      :one ->
+        Ash.Resource.Builder.add_calculation(
+          dsl_state,
+          :"#{attachment_def.name}_url",
+          :string,
+          {AshStorage.Calculations.AttachmentUrl,
+           attachment_name: attachment_def.name, resource: resource},
+          public?: true,
+          filterable?: false,
+          sortable?: false
+        )
+
+      :many ->
+        Ash.Resource.Builder.add_calculation(
+          dsl_state,
+          :"#{attachment_def.name}_urls",
+          {:array, :string},
+          {AshStorage.Calculations.AttachmentUrls,
+           attachment_name: attachment_def.name, resource: resource},
+          public?: true,
+          filterable?: false,
+          sortable?: false
+        )
+    end
+  end
+
+  # sobelow_skip ["DOS.BinToAtom"]
+  defp add_variant_url_calculations(dsl_state, attachment_def, resource) do
+    variants = attachment_def.variants || []
+
+    Enum.reduce(variants, {:ok, dsl_state}, fn variant_def, {:ok, dsl_state} ->
       case attachment_def.type do
         :one ->
           Ash.Resource.Builder.add_calculation(
             dsl_state,
-            :"#{attachment_def.name}_url",
+            :"#{attachment_def.name}_#{variant_def.name}_url",
             :string,
-            {AshStorage.Calculations.AttachmentUrl,
-             attachment_name: attachment_def.name, resource: resource},
+            {AshStorage.Calculations.VariantUrl,
+             attachment_name: attachment_def.name,
+             variant_name: variant_def.name,
+             resource: resource},
             public?: true,
             filterable?: false,
             sortable?: false
@@ -111,10 +154,12 @@ defmodule AshStorage.Transformers.SetupStorage do
         :many ->
           Ash.Resource.Builder.add_calculation(
             dsl_state,
-            calc_name,
+            :"#{attachment_def.name}_#{variant_def.name}_urls",
             {:array, :string},
-            {AshStorage.Calculations.AttachmentUrls,
-             attachment_name: attachment_def.name, resource: resource},
+            {AshStorage.Calculations.VariantUrls,
+             attachment_name: attachment_def.name,
+             variant_name: variant_def.name,
+             resource: resource},
             public?: true,
             filterable?: false,
             sortable?: false
@@ -122,8 +167,6 @@ defmodule AshStorage.Transformers.SetupStorage do
       end
     end)
   end
-
-  defp add_url_calculations({:error, error}, _), do: {:error, error}
 
   # sobelow_skip ["DOS.BinToAtom"]
   defp add_attachment_actions({:ok, dsl_state}, attachments) do

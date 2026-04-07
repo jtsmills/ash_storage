@@ -26,6 +26,20 @@ defmodule Demo.Blob do
         worker_module_name(Demo.Blob.PurgeBlobWorker)
       end
 
+      trigger :run_pending_variants do
+        action :run_pending_variants
+        read_action :read
+
+        where expr(
+                not is_nil(fragment("metadata->>'__pending_variants__'"))
+              )
+
+        scheduler_cron("* * * * *")
+        max_attempts(3)
+        scheduler_module_name(Demo.Blob.RunPendingVariantsScheduler)
+        worker_module_name(Demo.Blob.RunPendingVariantsWorker)
+      end
+
       trigger :run_pending_analyzers do
         action :run_pending_analyzers
         read_action :read

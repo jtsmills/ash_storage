@@ -13,6 +13,7 @@ defmodule AshStorage.Test.Attachment do
     blob_resource(AshStorage.Test.Blob)
     belongs_to_resource(:post, AshStorage.Test.Post)
     belongs_to_resource(:analyzable_post, AshStorage.Test.AnalyzablePost)
+    belongs_to_resource(:variant_post, AshStorage.Test.VariantPost)
   end
 
   attributes do

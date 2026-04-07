@@ -6,7 +6,8 @@ defmodule AshStorage.AttachmentDefinition do
     :service,
     :dependent,
     :__spark_metadata__,
-    analyzers: []
+    analyzers: [],
+    variants: []
   ]
 
   @shared_schema [

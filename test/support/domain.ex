@@ -11,5 +11,6 @@ defmodule AshStorage.Test.Domain do
     resource AshStorage.Test.MultiAttachment
     resource AshStorage.Test.ConfigurablePost
     resource AshStorage.Test.AnalyzablePost
+    resource AshStorage.Test.VariantPost
   end
 end

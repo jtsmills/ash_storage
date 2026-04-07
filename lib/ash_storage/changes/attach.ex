@@ -35,10 +35,18 @@ defmodule AshStorage.Changes.Attach do
       case changeset.context[:__ash_storage_attach__] do
         %{blob: blob, attachment_def: attachment_def, service_mod: service_mod, ctx: ctx} =
             context ->
+          resource = record.__struct__
+
           with {:ok, _} <- maybe_replace_existing(record, attachment_def, service_mod, ctx),
-               {:ok, attachment} <- create_attachment(record, attachment_def, blob) do
+               {:ok, attachment} <- create_attachment(record, attachment_def, blob),
+               :ok <- run_eager_variants(blob, attachment_def, resource),
+               {:ok, blob} <- store_oban_variants(blob, attachment_def, resource) do
             if context[:has_oban_analyzers?] do
               AshOban.run_trigger(blob, :run_pending_analyzers)
+            end
+
+            if has_oban_variants?(attachment_def) do
+              AshOban.run_trigger(blob, :run_pending_variants)
             end
 
             record =
@@ -390,5 +398,54 @@ defmodule AshStorage.Changes.Attach do
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+  end
+
+  # -- Variant helpers --
+
+  defp run_eager_variants(blob, attachment_def, resource) do
+    eager_variants =
+      (attachment_def.variants || [])
+      |> Enum.filter(&(&1.generate == :eager))
+
+    Enum.reduce_while(eager_variants, :ok, fn variant_def, :ok ->
+      case AshStorage.VariantGenerator.generate(blob, variant_def, resource, attachment_def) do
+        {:ok, _variant_blob} -> {:cont, :ok}
+        {:error, :not_accepted} -> {:cont, :ok}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp has_oban_variants?(attachment_def) do
+    (attachment_def.variants || [])
+    |> Enum.any?(&(&1.generate == :oban))
+  end
+
+  defp store_oban_variants(blob, attachment_def, resource) do
+    oban_variants =
+      (attachment_def.variants || [])
+      |> Enum.filter(&(&1.generate == :oban))
+
+    if oban_variants == [] do
+      {:ok, blob}
+    else
+      pending_variants =
+        Map.new(oban_variants, fn variant_def ->
+          {mod, opts} = AshStorage.VariantDefinition.normalize(variant_def)
+          string_opts = Map.new(opts, fn {k, v} -> {to_string(k), v} end)
+
+          {to_string(variant_def.name),
+           %{
+             "status" => "pending",
+             "module" => to_string(mod),
+             "opts" => string_opts,
+             "resource" => to_string(resource),
+             "attachment" => to_string(attachment_def.name)
+           }}
+        end)
+
+      metadata = Map.put(blob.metadata || %{}, "__pending_variants__", pending_variants)
+      Ash.update(blob, %{metadata: metadata}, action: :update_metadata)
+    end
   end
 end

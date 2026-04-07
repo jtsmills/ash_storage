@@ -274,9 +274,8 @@ Implement the `AshStorage.Service` behaviour to add custom backends.
 
 ## Roadmap
 
-- **Analyzers** — Pluggable metadata extraction (image dimensions, video duration, audio bitrate) stored in blob `metadata` map. Default behavior: run synchronously during `attach/4` from the local IO (avoids a download round-trip). With AshOban: optionally enqueue an analyze job instead for heavy analysis (video/audio). Per-attachment config: `analyze: :eager | :lazy | false`. Custom analyzers implement an `Analyzer` behaviour.
-- **Previewers** — Generate preview images for non-image files (PDFs, videos). On-demand by default: generated on first request via the serving plug, then cached. With AshOban: optionally pre-generate eagerly via a background job on upload. Custom previewers implement a `Previewer` behaviour.
-- **Variants** — Image/file transformations (resize, convert). On-demand by default (generated when URL is first requested), with optional eager pre-processing via AshOban. Variant records track the transformation digest and link to a variant blob. Named variants can be declared in the DSL.
+- ~~**Analyzers**~~ ✅ — Pluggable metadata extraction (image dimensions, video duration, audio bitrate) stored in blob `analyzers` map. Runs synchronously during attach from local IO by default. With AshOban: optionally enqueue via `analyze: :oban`. Supports `write_attributes` to write results back to parent record attributes. Custom analyzers implement the `AshStorage.Analyzer` behaviour.
+- ~~**Variants**~~ ✅ — File transformations: image resizing/conversion, PDF-to-thumbnail, video thumbnails, and any custom transform. Subsumes the previewer concept — a PDF thumbnail is just a variant. Three generation modes: `:on_demand` (default, generated inline on first URL request), `:eager` (during attach), `:oban` (background job via AshOban). Variant blobs are self-referential on the blob resource with digest-based cache invalidation. Named variants declared in DSL via `variant :name, {Module, opts}`. Custom transformers implement `AshStorage.Variant` behaviour.
 - **Checksum verification** — Integrity checking via checksums on upload
 - **Redirect handler** — A plug that redirects to the storage service URL instead of proxying
 - **Mirroring** — Mirror service that replicates uploads across multiple backends for redundancy
@@ -306,7 +305,7 @@ These are the Elixir libraries we're evaluating for each roadmap feature. All wo
 | [`exexif`](https://hex.pm/packages/exexif) | Pure Elixir | EXIF/TIFF metadata from JPEGs (camera info, GPS, exposure). |
 | [`image`](https://hex.pm/packages/image) | libvips | Also extracts dimensions and metadata. Good if already using it for variants. |
 
-#### Video/audio metadata and thumbnails (for analyzers + previewers)
+#### Video/audio metadata and thumbnails (for analyzers + variants)
 
 | Library | Approach | Notes |
 |---|---|---|
@@ -314,7 +313,7 @@ These are the Elixir libraries we're evaluating for each roadmap feature. All wo
 | [`xav`](https://hex.pm/packages/xav) | FFmpeg NIFs | NIF-based, no shell-out. Part of elixir-webrtc org, actively maintained. Tighter integration but heavier dependency. |
 | [`thumbnex`](https://hex.pm/packages/thumbnex) | ImageMagick + FFmpeg | Simple API for thumbnails from images, videos, and PDFs. Uses `convert` for PDFs, `ffmpeg` for videos. |
 
-#### PDF preview generation (for previewers)
+#### PDF thumbnails (for variants)
 
 | Library | Approach | Notes |
 |---|---|---|

@@ -45,6 +45,7 @@ defmodule AshStorage do
 
   alias AshStorage.AttachmentDefinition
   alias AshStorage.AnalyzerDefinition
+  alias AshStorage.VariantDefinition
 
   @analyzer %Spark.Dsl.Entity{
     name: :analyzer,
@@ -59,6 +60,19 @@ defmodule AshStorage do
     target: AnalyzerDefinition
   }
 
+  @variant %Spark.Dsl.Entity{
+    name: :variant,
+    args: [:name, :module],
+    describe: "Declares a named variant transformation for this attachment.",
+    examples: [
+      "variant :thumbnail, {MyApp.ImageResize, width: 200, height: 200}",
+      "variant :hero, {MyApp.ImageResize, width: 1200, format: :jpg}, generate: :eager",
+      "variant :pdf_preview, MyApp.PdfThumbnail, generate: :oban"
+    ],
+    schema: VariantDefinition.schema(),
+    target: VariantDefinition
+  }
+
   @has_one_attached %Spark.Dsl.Entity{
     name: :has_one_attached,
     args: [:name],
@@ -71,7 +85,8 @@ defmodule AshStorage do
     target: AttachmentDefinition,
     auto_set_fields: [type: :one],
     entities: [
-      analyzers: [@analyzer]
+      analyzers: [@analyzer],
+      variants: [@variant]
     ]
   }
 
@@ -87,7 +102,8 @@ defmodule AshStorage do
     target: AttachmentDefinition,
     auto_set_fields: [type: :many],
     entities: [
-      analyzers: [@analyzer]
+      analyzers: [@analyzer],
+      variants: [@variant]
     ]
   }
 
@@ -122,7 +138,7 @@ defmodule AshStorage do
   use Spark.Dsl.Extension,
     sections: [@storage],
     transformers: [AshStorage.Transformers.SetupStorage],
-    verifiers: [AshStorage.Verifiers.ValidateObanAnalyzers]
+    verifiers: [AshStorage.Verifiers.ValidateObanAnalyzers, AshStorage.Verifiers.ValidateObanVariants]
 
   @doc """
   Generate a unique key for storing a file.
