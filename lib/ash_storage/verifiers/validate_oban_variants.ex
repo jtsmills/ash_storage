@@ -22,45 +22,32 @@ defmodule AshStorage.Verifiers.ValidateObanVariants do
 
   defp validate_blob_has_trigger(blob_resource) do
     if Code.ensure_loaded?(AshOban.Info) do
-      case AshOban.Info.oban_triggers(blob_resource) do
-        triggers when is_list(triggers) ->
-          if Enum.any?(triggers, &(&1.action == :run_pending_variants)) do
-            :ok
-          else
-            {:error,
-             Spark.Error.DslError.exception(
-               message: """
-               One or more variants use `generate: :oban`, but the blob resource \
-               `#{inspect(blob_resource)}` does not have an AshOban trigger targeting \
-               the `:run_pending_variants` action.
+      triggers = AshOban.Info.oban_triggers(blob_resource)
 
-               Add an oban trigger to your blob resource:
+      if Enum.any?(triggers, &(&1.action == :run_pending_variants)) do
+        :ok
+      else
+        {:error,
+         Spark.Error.DslError.exception(
+           message: """
+           One or more variants use `generate: :oban`, but the blob resource \
+           `#{inspect(blob_resource)}` does not have an AshOban trigger targeting \
+           the `:run_pending_variants` action.
 
-                   oban do
-                     triggers do
-                       trigger :run_pending_variants do
-                         action :run_pending_variants
-                         read_action :read
-                         where expr(...)
-                         scheduler_cron("* * * * *")
-                       end
-                     end
+           Add an oban trigger to your blob resource:
+
+               oban do
+                 triggers do
+                   trigger :run_pending_variants do
+                     action :run_pending_variants
+                     read_action :read
+                     where expr(...)
+                     scheduler_cron("* * * * *")
                    end
-               """
-             )}
-          end
-
-        _ ->
-          {:error,
-           Spark.Error.DslError.exception(
-             message: """
-             One or more variants use `generate: :oban`, but the blob resource \
-             `#{inspect(blob_resource)}` does not use the `AshOban` extension.
-
-             Add `AshOban` to your blob resource's extensions and configure a trigger \
-             for the `:run_pending_variants` action.
-             """
-           )}
+                 end
+               end
+           """
+         )}
       end
     else
       {:error,
