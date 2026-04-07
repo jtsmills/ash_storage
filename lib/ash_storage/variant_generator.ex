@@ -27,20 +27,18 @@ defmodule AshStorage.VariantGenerator do
     with {:ok, {service_mod, service_opts}} <- resolve_service(resource, attachment_def),
          {:ok, source_data} <-
            download_source(source_blob, service_mod, service_opts, resource, attachment_def),
-         {:ok, transform_result, variant_data} <- run_transform(module, opts, source_data),
-         {:ok, variant_blob} <-
-           upload_and_create_variant(
-             source_blob,
-             variant_name,
-             digest,
-             transform_result,
-             variant_data,
-             resource,
-             service_mod,
-             service_opts,
-             attachment_def
-           ) do
-      {:ok, variant_blob}
+         {:ok, transform_result, variant_data} <- run_transform(module, opts, source_data) do
+      upload_and_create_variant(
+        source_blob,
+        variant_name,
+        digest,
+        transform_result,
+        variant_data,
+        resource,
+        service_mod,
+        service_opts,
+        attachment_def
+      )
     end
   end
 

@@ -93,9 +93,8 @@ defmodule AshStorage.Transformers.SetupStorage do
     resource = Spark.Dsl.Extension.get_persisted(dsl_state, :module)
 
     Enum.reduce(attachments, {:ok, dsl_state}, fn attachment_def, {:ok, dsl_state} ->
-      with {:ok, dsl_state} <- add_base_url_calculation(dsl_state, attachment_def, resource),
-           {:ok, dsl_state} <- add_variant_url_calculations(dsl_state, attachment_def, resource) do
-        {:ok, dsl_state}
+      with {:ok, dsl_state} <- add_base_url_calculation(dsl_state, attachment_def, resource) do
+        add_variant_url_calculations(dsl_state, attachment_def, resource)
       end
     end)
   end
@@ -175,9 +174,8 @@ defmodule AshStorage.Transformers.SetupStorage do
 
       with {:ok, dsl_state} <- add_attach_action(dsl_state, name),
            {:ok, dsl_state} <- add_detach_action(dsl_state, name),
-           {:ok, dsl_state} <- add_purge_action(dsl_state, name),
-           {:ok, dsl_state} <- add_confirm_direct_upload_action(dsl_state, name) do
-        {:ok, dsl_state}
+           {:ok, dsl_state} <- add_purge_action(dsl_state, name) do
+        add_confirm_direct_upload_action(dsl_state, name)
       end
     end)
   end

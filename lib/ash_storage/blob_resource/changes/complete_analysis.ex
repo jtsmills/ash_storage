@@ -26,9 +26,19 @@ defmodule AshStorage.BlobResource.Changes.CompleteAnalysis do
       updated_analyzers = put_in(current_analyzers, [analyzer_key, "status"], status)
       updated_metadata = Map.merge(current_metadata, metadata_to_merge)
 
+      still_pending? =
+        Enum.any?(updated_analyzers, fn {_key, info} ->
+          info["status"] == "pending"
+        end)
+
       changeset
       |> Ash.Changeset.force_change_attribute(:analyzers, updated_analyzers)
       |> Ash.Changeset.force_change_attribute(:metadata, updated_metadata)
+      |> then(fn cs ->
+        if still_pending?,
+          do: cs,
+          else: Ash.Changeset.force_change_attribute(cs, :pending_analyzers, false)
+      end)
     end)
   end
 
@@ -53,11 +63,21 @@ defmodule AshStorage.BlobResource.Changes.CompleteAnalysis do
     updated_analyzers = put_in(current_analyzers, [analyzer_key, "status"], status)
     updated_metadata = Map.merge(current_metadata, metadata_to_merge)
 
-    {:atomic,
-     %{
-       analyzers: {:atomic, updated_analyzers},
-       metadata: {:atomic, updated_metadata}
-     }}
+    still_pending? =
+      Enum.any?(updated_analyzers, fn {_key, info} ->
+        info["status"] == "pending"
+      end)
+
+    atomics = %{
+      analyzers: {:atomic, updated_analyzers},
+      metadata: {:atomic, updated_metadata}
+    }
+
+    if still_pending? do
+      {:atomic, atomics}
+    else
+      {:atomic, Map.put(atomics, :pending_analyzers, {:atomic, false})}
+    end
   end
 
   defp do_atomic(changeset) do
@@ -96,6 +116,23 @@ defmodule AshStorage.BlobResource.Changes.CompleteAnalysis do
       else
         atomics
       end
+
+    # Atomically clear pending_analyzers if no entries remain with status 'pending'
+    # after this update. The subquery checks the updated jsonb value.
+    atomics =
+      Map.put(
+        atomics,
+        :pending_analyzers,
+        {:atomic,
+         Ash.Expr.expr(
+           fragment(
+             "EXISTS (SELECT 1 FROM jsonb_each(jsonb_set(coalesce(?, '{}'), ?::text[], to_jsonb(?::text))) AS a WHERE a.value->>'status' = 'pending')",
+             analyzers,
+             ^[analyzer_key, "status"],
+             ^status
+           )
+         )}
+      )
 
     {:atomic, atomics}
   end

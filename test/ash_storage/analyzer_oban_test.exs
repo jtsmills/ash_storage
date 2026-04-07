@@ -276,6 +276,92 @@ defmodule AshStorage.AnalyzerObanTest do
     end
   end
 
+  describe "pending_analyzers flag" do
+    test "pending_analyzers is set to true when oban analyzers are configured" do
+      post = create_post!()
+
+      blob =
+        attach_with_analyzers!(post, "hello",
+          filename: "hello.txt",
+          content_type: "text/plain",
+          analyzers_map: %{
+            to_string(AshStorage.Test.TestAnalyzer) => %{
+              "status" => "pending",
+              "opts" => %{}
+            }
+          }
+        )
+
+      {:ok, blob} =
+        Ash.update(blob, %{pending_analyzers: true}, action: :update_metadata)
+
+      assert blob.pending_analyzers == true
+    end
+
+    test "pending_analyzers clears when last analyzer completes" do
+      post = create_post!()
+
+      blob =
+        attach_with_analyzers!(post, "hello",
+          filename: "hello.txt",
+          content_type: "text/plain",
+          analyzers_map: %{
+            to_string(AshStorage.Test.TestAnalyzer) => %{
+              "status" => "pending",
+              "opts" => %{}
+            }
+          }
+        )
+
+      {:ok, blob} =
+        Ash.update(blob, %{pending_analyzers: true}, action: :update_metadata)
+
+      assert blob.pending_analyzers == true
+
+      # Run the analyzer — it's the only one, so the flag should clear
+      {:ok, blob} = Operations.run_analyzer(blob, AshStorage.Test.TestAnalyzer)
+
+      # Re-fetch to get the flag from DB
+      blob = Ash.get!(PgBlob, blob.id)
+      assert blob.pending_analyzers == false
+    end
+
+    test "pending_analyzers stays true while analyzers remain pending" do
+      post = create_post!()
+
+      blob =
+        attach_with_analyzers!(post, "hello",
+          filename: "hello.txt",
+          content_type: "text/plain",
+          analyzers_map: %{
+            to_string(AshStorage.Test.TestAnalyzer) => %{
+              "status" => "pending",
+              "opts" => %{}
+            },
+            to_string(AshStorage.Test.FailingAnalyzer) => %{
+              "status" => "pending",
+              "opts" => %{}
+            }
+          }
+        )
+
+      {:ok, blob} =
+        Ash.update(blob, %{pending_analyzers: true}, action: :update_metadata)
+
+      # Run only TestAnalyzer — FailingAnalyzer is still pending
+      {:ok, _blob} = Operations.run_analyzer(blob, AshStorage.Test.TestAnalyzer)
+
+      blob = Ash.get!(PgBlob, blob.id)
+      assert blob.pending_analyzers == true
+
+      # Now run FailingAnalyzer — it errors, but both are now non-pending
+      {:ok, _blob} = Operations.run_analyzer(blob, AshStorage.Test.FailingAnalyzer)
+
+      blob = Ash.get!(PgBlob, blob.id)
+      assert blob.pending_analyzers == false
+    end
+  end
+
   describe "complete_analysis action atomic fragments" do
     test "jsonb_set atomically updates analyzer status" do
       post = create_post!()

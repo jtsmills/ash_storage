@@ -10,7 +10,7 @@ defmodule AshStorage.Test.PgAttachment do
     repo(AshStorage.TestRepo)
 
     references do
-      reference :post, on_delete: :nilify
+      reference(:post, on_delete: :nilify)
     end
   end
 

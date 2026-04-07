@@ -461,9 +461,7 @@ defmodule AshStorage.Changes.Attach do
 
       metadata = Map.put(blob.metadata || %{}, "__pending_variants__", pending_variants)
 
-      Ash.update(blob, %{metadata: metadata, pending_variants: true},
-        action: :update_metadata
-      )
+      Ash.update(blob, %{metadata: metadata, pending_variants: true}, action: :update_metadata)
     end
   end
 end

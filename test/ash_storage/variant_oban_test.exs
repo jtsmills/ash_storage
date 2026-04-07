@@ -56,6 +56,34 @@ defmodule AshStorage.VariantObanTest do
       assert pending["oban_upper"]["module"] == to_string(AshStorage.Test.UppercaseVariant)
     end
 
+    test "pending_variants flag is set during attach" do
+      post = create_post!()
+
+      {:ok, %{blob: blob}} =
+        AshStorage.Operations.attach(post, :cover_image, "hello world",
+          filename: "test.txt",
+          content_type: "text/plain"
+        )
+
+      assert blob.pending_variants == true
+    end
+
+    test "pending_variants flag clears after run_pending_variants" do
+      post = create_post!()
+
+      {:ok, %{blob: blob}} =
+        AshStorage.Operations.attach(post, :cover_image, "hello world",
+          filename: "test.txt",
+          content_type: "text/plain"
+        )
+
+      assert blob.pending_variants == true
+
+      {:ok, blob} = Ash.update(blob, %{}, action: :run_pending_variants)
+
+      assert blob.pending_variants == false
+    end
+
     test "run_pending_variants action generates variant blobs" do
       post = create_post!()
 

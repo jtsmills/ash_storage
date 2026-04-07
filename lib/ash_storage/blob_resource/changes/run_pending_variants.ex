@@ -18,7 +18,7 @@ defmodule AshStorage.BlobResource.Changes.RunPendingVariants do
           info["status"] == "pending"
         end)
 
-      result = Enum.reduce_while(pending, {:ok, blob}, fn {variant_name, info}, {:ok, blob} ->
+      Enum.reduce_while(pending, {:ok, blob}, fn {variant_name, info}, {:ok, blob} ->
         # sobelow_skip ["DOS.BinToAtom"]
         module = String.to_existing_atom(info["module"])
         opts = deserialize_opts(info["opts"] || %{})
@@ -33,42 +33,44 @@ defmodule AshStorage.BlobResource.Changes.RunPendingVariants do
           generate: :oban
         }
 
-        case AshStorage.VariantGenerator.generate(
-               blob,
-               variant_def,
-               resource_module,
-               attachment_def
-             ) do
-          {:ok, _variant_blob} ->
-            updated_variants =
-              put_in(pending_variants, [variant_name, "status"], "complete")
+        new_status =
+          case AshStorage.VariantGenerator.generate(
+                 blob,
+                 variant_def,
+                 resource_module,
+                 attachment_def
+               ) do
+            {:ok, _variant_blob} -> "complete"
+            {:error, :not_accepted} -> "skipped"
+            {:error, error} -> {:halt_error, error}
+          end
 
-            metadata = Map.put(blob.metadata, "__pending_variants__", updated_variants)
-
-            case Ash.update(blob, %{metadata: metadata}, action: :update_metadata) do
-              {:ok, blob} -> {:cont, {:ok, blob}}
-              {:error, error} -> {:halt, {:error, error}}
-            end
-
-          {:error, :not_accepted} ->
-            updated_variants =
-              put_in(pending_variants, [variant_name, "status"], "skipped")
-
-            metadata = Map.put(blob.metadata, "__pending_variants__", updated_variants)
-
-            case Ash.update(blob, %{metadata: metadata}, action: :update_metadata) do
-              {:ok, blob} -> {:cont, {:ok, blob}}
-              {:error, error} -> {:halt, {:error, error}}
-            end
-
-          {:error, error} ->
+        case new_status do
+          {:halt_error, error} ->
             {:halt, {:error, error}}
+
+          status ->
+            updated_variants =
+              put_in(pending_variants, [variant_name, "status"], status)
+
+            still_pending? =
+              Enum.any?(updated_variants, fn {_k, v} -> v["status"] == "pending" end)
+
+            metadata = Map.put(blob.metadata, "__pending_variants__", updated_variants)
+
+            update_params =
+              if still_pending? do
+                %{metadata: metadata}
+              else
+                %{metadata: metadata, pending_variants: false}
+              end
+
+            case Ash.update(blob, update_params, action: :update_metadata) do
+              {:ok, blob} -> {:cont, {:ok, blob}}
+              {:error, error} -> {:halt, {:error, error}}
+            end
         end
       end)
-
-      with {:ok, blob} <- result do
-        Ash.update(blob, %{pending_variants: false}, action: :update_metadata)
-      end
     end)
   end
 

@@ -276,6 +276,7 @@ Implement the `AshStorage.Service` behaviour to add custom backends.
 
 - ~~**Analyzers**~~ ✅ — Pluggable metadata extraction (image dimensions, video duration, audio bitrate) stored in blob `analyzers` map. Runs synchronously during attach from local IO by default. With AshOban: optionally enqueue via `analyze: :oban`. Supports `write_attributes` to write results back to parent record attributes. Custom analyzers implement the `AshStorage.Analyzer` behaviour.
 - ~~**Variants**~~ ✅ — File transformations: image resizing/conversion, PDF-to-thumbnail, video thumbnails, and any custom transform. Subsumes the previewer concept — a PDF thumbnail is just a variant. Three generation modes: `:on_demand` (default, generated inline on first URL request), `:eager` (during attach), `:oban` (background job via AshOban). Variant blobs are self-referential on the blob resource with digest-based cache invalidation. Named variants declared in DSL via `variant :name, {Module, opts}`. Custom transformers implement `AshStorage.Variant` behaviour.
+- **Per-variant oban jobs** — Currently all pending variants for a blob run in a single oban job. Refactor so each variant gets its own job lifecycle, enabling parallel generation and independent retries.
 - **Checksum verification** — Integrity checking via checksums on upload
 - **Redirect handler** — A plug that redirects to the storage service URL instead of proxying
 - **Mirroring** — Mirror service that replicates uploads across multiple backends for redundancy

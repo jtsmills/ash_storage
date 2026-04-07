@@ -61,17 +61,15 @@ defmodule AshStorage.BlobResource.Transformers.SetupBlob do
              source_attribute: :variant_of_blob_id,
              define_attribute?: false,
              public?: true
-           ),
-         {:ok, dsl_state} <-
-           Ash.Resource.Builder.add_relationship(
-             dsl_state,
-             :has_many,
-             :variants,
-             blob_resource,
-             destination_attribute: :variant_of_blob_id,
-             public?: true
            ) do
-      {:ok, dsl_state}
+      Ash.Resource.Builder.add_relationship(
+        dsl_state,
+        :has_many,
+        :variants,
+        blob_resource,
+        destination_attribute: :variant_of_blob_id,
+        public?: true
+      )
     end
   end
 
